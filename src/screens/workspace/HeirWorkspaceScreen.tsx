@@ -10,7 +10,6 @@ import { getVaultTrustedPersons, getVaultUnlockRequests, isRequestUnlocked } fro
 import { listEstateTasks } from '../../services/checklist';
 import { getSubscriptions, calculateMonthlySavings } from '../../services/subscriptions';
 import { EstateTask, TrustedPerson } from '../../types';
-import { alert } from '../../components/AppAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -73,9 +72,6 @@ export default function HeirWorkspaceScreen() {
   const vaultOwnerName = ownerName;
   const completedCount = tasks.filter((t) => t.status === 'completed').length;
   const urgentTasks = tasks.filter((t) => t.priority === 'high' && t.status !== 'completed');
-
-  const comingSoon = (feature: string) =>
-    alert('Coming Soon', `${feature} will be available in a future update.`);
 
   if (loading) {
     return (
@@ -152,7 +148,11 @@ export default function HeirWorkspaceScreen() {
             label="Documents"
             onPress={() => navigation.navigate('WorkspaceDocuments', { vaultOwnerId, vaultOwnerName })}
           />
-          <QuickAction icon="stats-chart-outline" label="Activity" onPress={() => comingSoon('The activity log')} />
+          <QuickAction
+            icon="stats-chart-outline"
+            label="Activity"
+            onPress={() => navigation.navigate('WorkspaceActivity', { vaultOwnerId, vaultOwnerName })}
+          />
         </View>
 
         {urgentTasks.length > 0 && (

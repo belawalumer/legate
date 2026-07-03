@@ -28,6 +28,7 @@ import TrustedPersonsScreen from '../screens/settings/TrustedPersonsScreen';
 import DeathVerificationScreen from '../screens/estate/DeathVerificationScreen';
 import HeirWorkspaceScreen from '../screens/workspace/HeirWorkspaceScreen';
 import SubscriptionTrackerScreen from '../screens/workspace/SubscriptionTrackerScreen';
+import WorkspaceActivityScreen from '../screens/workspace/WorkspaceActivityScreen';
 import PaywallScreen from '../screens/settings/PaywallScreen';
 import LegalDocumentScreen, { LegalDocumentContent } from '../screens/settings/LegalDocumentScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
@@ -46,6 +47,7 @@ export type RootStackParamList = {
   TrustedPersons: { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
   WorkspaceVault: { vaultOwnerId: string; vaultOwnerName: string };
   WorkspaceDocuments: { vaultOwnerId: string; vaultOwnerName: string };
+  WorkspaceActivity: { vaultOwnerId: string; vaultOwnerName: string };
   Subscriptions: { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
   HeirWorkspace: { vaultOwnerId: string };
   Paywall: undefined;
@@ -350,6 +352,11 @@ export default function AppNavigator() {
             <Stack.Screen
               name="WorkspaceDocuments"
               component={DocumentsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="WorkspaceActivity"
+              component={WorkspaceActivityScreen}
               options={{ headerShown: false }}
             />
             <Stack.Screen
