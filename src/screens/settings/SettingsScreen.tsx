@@ -143,7 +143,11 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       {/* Header with User Profile */}
       <View style={styles.header}>
-        <View style={styles.profileSection}>
+        <TouchableOpacity
+          style={styles.profileSection}
+          onPress={() => navigation.navigate('EditProfile')}
+          activeOpacity={0.7}
+        >
           <View style={styles.avatar}>
             {userProfile?.avatarUrl ? (
               <Image source={{ uri: userProfile.avatarUrl }} style={styles.avatarImage} />
@@ -166,7 +170,8 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.gold} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>

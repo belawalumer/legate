@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Text, AppState, AppStateStatus } from 'react-native';
+import { View, TouchableOpacity, Text, AppState, AppStateStatus, Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -10,7 +10,7 @@ import { colors } from '../constants/theme';
 import SplashScreen from '../screens/splash/SplashScreen';
 import AppLockScreen from '../screens/auth/AppLockScreen';
 import { getBiometricLockEnabled, getAutoLockSeconds } from '../services/appSettings';
-import { isBiometricAvailable } from '../services/auth';
+import { isBiometricAvailable, setSessionFromUrl } from '../services/auth';
 
 // Screens (we'll create these)
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -30,6 +30,9 @@ import HeirWorkspaceScreen from '../screens/workspace/HeirWorkspaceScreen';
 import SubscriptionTrackerScreen from '../screens/workspace/SubscriptionTrackerScreen';
 import PaywallScreen from '../screens/settings/PaywallScreen';
 import LegalDocumentScreen, { LegalDocumentContent } from '../screens/settings/LegalDocumentScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import SetNewPasswordScreen from '../screens/auth/SetNewPasswordScreen';
+import EditProfileScreen from '../screens/settings/EditProfileScreen';
 
 export type RootStackParamList = {
   Auth: { screen?: 'Login' | 'SignUp' } | undefined;
@@ -47,8 +50,10 @@ export type RootStackParamList = {
   HeirWorkspace: { vaultOwnerId: string };
   Paywall: undefined;
   LegalDocument: { content: LegalDocumentContent };
+  EditProfile: undefined;
   Login: undefined;
   SignUp: undefined;
+  ForgotPassword: undefined;
 };
 
 export type MainTabParamList = {
@@ -169,6 +174,7 @@ export default function AppNavigator() {
   const [splashDone, setSplashDone] = useState(false);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [locked, setLocked] = useState(false);
+  const [passwordRecoveryPending, setPasswordRecoveryPending] = useState(false);
   const appState = useRef(AppState.currentState);
   const backgroundedAt = useRef<number | null>(null);
 
@@ -184,6 +190,25 @@ export default function AppNavigator() {
     }, 2000);
 
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Handle password-reset emails opening the app via
+    // legate://auth/callback#access_token=... - both when the app is
+    // launched fresh from the link and when it's already running.
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      setSessionFromUrl(url)
+        .then((result) => {
+          if (result?.isRecovery) setPasswordRecoveryPending(true);
+        })
+        .catch((e) => console.error('Error handling auth deep link:', e));
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+
+    const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -236,6 +261,10 @@ export default function AppNavigator() {
 
   if (user && locked) {
     return <AppLockScreen onUnlock={() => setLocked(false)} />;
+  }
+
+  if (user && passwordRecoveryPending) {
+    return <SetNewPasswordScreen onDone={() => setPasswordRecoveryPending(false)} />;
   }
 
   return (
@@ -352,6 +381,11 @@ export default function AppNavigator() {
               component={LegalDocumentScreen}
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="EditProfile"
+              component={EditProfileScreen}
+              options={{ headerShown: false }}
+            />
           </>
         ) : (
           <>
@@ -379,6 +413,7 @@ function AuthStack({ route }: any) {
     >
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SignUp" component={SignUpScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

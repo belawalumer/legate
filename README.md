@@ -8,7 +8,7 @@ See [FUNCTIONALITY.md](./FUNCTIONALITY.md) for a full breakdown of what's implem
 
 - **Client**: Expo / React Native, TypeScript, React Navigation (stack + bottom tabs)
 - **Backend**: Supabase (Postgres, Auth, Row Level Security, Edge Functions)
-- **Email**: Resend, via a Supabase Edge Function
+- **Email**: Gmail SMTP — used both as Supabase's Auth email sender and by a Supabase Edge Function for trusted-person invitations
 - **UI**: React Native Paper, custom navy/gold theme (`src/constants/theme.ts`)
 
 ## Modules
@@ -49,7 +49,7 @@ See [FUNCTIONALITY.md](./FUNCTIONALITY.md) for a full breakdown of what's implem
 - Expo CLI (`npm install -g expo-cli`, or use `npx expo`)
 - A Supabase account ([supabase.com](https://supabase.com))
 - (Optional) A [Google Cloud](https://console.cloud.google.com) account for Google sign-in
-- (Optional) A [Resend](https://resend.com) account for invitation emails
+- (Optional) A Gmail account with an [App Password](https://myaccount.google.com/apppasswords) for sending emails
 
 ### 1. Install dependencies
 
@@ -89,9 +89,24 @@ Google login uses Supabase's OAuth provider, so it needs to be configured in bot
 3. Copy the **Callback URL (for OAuth)** shown on that same Supabase provider page (it looks like `https://<your-project-ref>.supabase.co/auth/v1/callback`) and add it under **Authorized redirect URIs** on the Google OAuth client.
 4. In Supabase, go to **Authentication → URL Configuration** and add `legate://auth/callback` to **Redirect URLs** (this is the app's own deep link, defined by `"scheme": "legate"` in `app.json`).
 
-Without this, the "Continue with Google" buttons in the app will fail with an error from Supabase instead of opening the Google login prompt. Email/password and magic-link sign-in work without any of this.
+Without this, the "Continue with Google" buttons in the app will fail with an error from Supabase instead of opening the Google login prompt. Email/password sign-in works without any of this.
 
-### 5. Configure environment variables
+### 5. Set up Gmail SMTP (for account confirmation emails)
+
+By default, Supabase sends confirmation/reset emails through its own built-in mailer, which is rate-limited and unreliable — fine for a quick test, not for real use. To send through Gmail instead:
+
+1. Turn on 2-Step Verification on the Google account you want to send from (required for App Passwords): [myaccount.google.com/security](https://myaccount.google.com/security).
+2. Generate an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) — pick "Mail" as the app, name it anything (e.g. "Legate"), and copy the 16-character password shown.
+3. In the Supabase dashboard, go to **Project Settings → Authentication → SMTP Settings**, enable custom SMTP, and fill in:
+   - **Host**: `smtp.gmail.com`
+   - **Port**: `465`
+   - **Username**: your full Gmail address
+   - **Password**: the App Password from step 2 (not your normal Gmail password)
+   - **Sender email**: your Gmail address
+   - **Sender name**: `Legate`
+4. Save. New signups, password resets, etc. will now be sent through Gmail.
+
+### 7. Configure environment variables
 
 Create a `.env` file in the project root using the Project URL and anon key from step 2:
 
@@ -100,7 +115,7 @@ EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### 6. Run the app
+### 8. Run the app
 
 ```bash
 npm start        # Expo dev server
@@ -109,9 +124,9 @@ npm run android  # Android emulator
 npm run web      # Web
 ```
 
-### 7. (Optional) Deploy the invitation email function
+### 9. (Optional) Deploy the invitation email function
 
-The `send-invitation` Edge Function emails a trusted person when they're invited to a vault. Without it, invitations are still saved to the database — the person just won't get an email about it.
+The `send-invitation` Edge Function emails a trusted person when they're invited to a vault, sent via the same Gmail account configured in step 5. Without it, invitations are still saved to the database — the person just won't get an email about it.
 
 ```bash
 supabase login
@@ -119,15 +134,14 @@ supabase link --project-ref your-project-ref
 supabase functions deploy send-invitation
 ```
 
-Then, to actually send real emails:
+Then set your Gmail address and App Password (the same one from step 5) as Edge Function secrets:
 
-1. Sign up at [resend.com](https://resend.com) and get an API key.
-2. Set it as a secret on your Supabase project:
-   ```bash
-   supabase secrets set RESEND_API_KEY=your_resend_api_key
-   ```
+```bash
+supabase secrets set GMAIL_ADDRESS=your_gmail_address@gmail.com
+supabase secrets set GMAIL_APP_PASSWORD=your_16_character_app_password
+```
 
-Without `RESEND_API_KEY` configured, the function still runs and the invitation is still saved, but no email is sent (it degrades gracefully rather than failing).
+Without these set, the function still runs and the invitation is still saved, but no email is sent (it degrades gracefully rather than failing).
 
 ### Notes on Storage bucket access
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { signInWithEmail, signInWithMagicLink, signInWithGoogle } from '../../services/auth';
+import { signInWithEmail, signInWithGoogle } from '../../services/auth';
 import { colors, borderRadius } from '../../constants/theme';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
 import { alert } from '../../components/AppAlert';
@@ -40,23 +40,6 @@ export default function LoginScreen({ navigation }: any) {
     }
   };
 
-  const handleMagicLink = async () => {
-    if (!email) {
-      alert('Error', 'Please enter your email');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await signInWithMagicLink(email);
-      alert('Check Your Email', 'We sent you a magic link to sign in.');
-    } catch (error: any) {
-      alert('Error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Legate</Text>
@@ -90,11 +73,10 @@ export default function LoginScreen({ navigation }: any) {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.button, styles.secondaryButton]}
-        onPress={handleMagicLink}
-        disabled={loading}
+        onPress={() => navigation.navigate('ForgotPassword')}
+        style={styles.forgotPasswordButton}
       >
-        <Text style={styles.buttonText}>Send Magic Link</Text>
+        <Text style={styles.linkText}>Forgot password?</Text>
       </TouchableOpacity>
 
       <View style={styles.dividerRow}>
@@ -158,14 +140,15 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: colors.navy,
   },
-  secondaryButton: {
-    backgroundColor: colors.gold,
-  },
   buttonText: {
     color: colors.cream,
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  forgotPasswordButton: {
+    alignItems: 'center',
+    marginBottom: 12,
   },
   dividerRow: {
     flexDirection: 'row',

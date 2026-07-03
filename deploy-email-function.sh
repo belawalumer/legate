@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Deploy Send Invitation Email Function
-# This script sets up and deploys the Edge Function with Resend integration
+# This script sets up and deploys the Edge Function with Gmail SMTP integration
 
 echo "🚀 Deploying Send Invitation Email Function..."
 echo ""
@@ -32,19 +32,22 @@ fi
 
 supabase link --project-ref "$PROJECT_REF"
 
-# Step 3: Set Resend API key as secret
+# Step 3: Set Gmail SMTP credentials as secrets
 echo ""
-echo "📝 Step 3: Set your Resend API key as a secret"
-echo "   Get a key from https://resend.com/api-keys"
-read -s -p "Enter your Resend API key: " RESEND_API_KEY
+echo "📝 Step 3: Set your Gmail SMTP credentials as secrets"
+echo "   Generate an App Password at https://myaccount.google.com/apppasswords"
+echo "   (requires 2-Step Verification to be enabled on the Google account)"
+read -p "Enter your Gmail address: " GMAIL_ADDRESS
+read -s -p "Enter your Gmail App Password: " GMAIL_APP_PASSWORD
 echo ""
 
-if [ -z "$RESEND_API_KEY" ]; then
-    echo "❌ Resend API key is required"
+if [ -z "$GMAIL_ADDRESS" ] || [ -z "$GMAIL_APP_PASSWORD" ]; then
+    echo "❌ Gmail address and App Password are required"
     exit 1
 fi
 
-supabase secrets set RESEND_API_KEY="$RESEND_API_KEY"
+supabase secrets set GMAIL_ADDRESS="$GMAIL_ADDRESS"
+supabase secrets set GMAIL_APP_PASSWORD="$GMAIL_APP_PASSWORD"
 
 # Step 4: Deploy the function
 echo ""

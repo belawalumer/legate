@@ -109,18 +109,108 @@ export async function getCurrentUser() {
 }
 
 /**
- * Send magic link for passwordless login
+ * Send a password reset email. The link opens the app via
+ * legate://auth/callback with type=recovery, which AppNavigator detects and
+ * routes to the SetNewPassword screen.
  */
-export async function signInWithMagicLink(email: string) {
-  const { data, error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: AuthSession.makeRedirectUri({ path: 'auth/callback' }),
-    },
+export async function sendPasswordResetEmail(email: string) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: AuthSession.makeRedirectUri({ path: 'auth/callback' }),
   });
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Set a new password for the currently authenticated user (used both for the
+ * forgot-password recovery flow and for changing password from Settings).
+ */
+export async function updatePassword(newPassword: string) {
+  const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Send a one-time 6-digit code to the given email, used to confirm sensitive
+ * profile changes (currently: password change from Settings) without
+ * requiring the user to leave the app for a link-based flow.
+ */
+export async function sendProfileChangeOtp(email: string) {
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false },
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Verify a one-time code sent via sendProfileChangeOtp.
+ */
+export async function verifyProfileChangeOtp(email: string, code: string) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: 'email',
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Update the current user's display name. Low-risk, so it saves immediately
+ * without an OTP step (unlike password changes).
+ */
+export async function updateFullName(fullName: string) {
+  const { error: authError } = await supabase.auth.updateUser({
+    data: { full_name: fullName },
+  });
+  if (authError) throw authError;
+
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Not signed in');
+
+  const { error: profileError } = await supabase
+    .from('user_profiles')
+    .update({ full_name: fullName })
+    .eq('id', user.id);
+  if (profileError) throw profileError;
+}
+
+/**
+ * True if this account was created/linked via Google - such accounts have
+ * no Legate-managed password to change.
+ */
+export function isGoogleUser(user: { app_metadata?: { provider?: string }; identities?: { provider: string }[] } | null): boolean {
+  if (!user) return false;
+  if (user.app_metadata?.provider === 'google') return true;
+  return !!user.identities?.some((i) => i.provider === 'google');
+}
+
+/**
+ * Parse access/refresh tokens out of a Supabase auth redirect URL (used for
+ * both the Google OAuth callback and password-recovery deep links) and set
+ * them as the active session. Reports whether this was a recovery link so
+ * the caller can route to the "set new password" screen instead of Home.
+ */
+export async function setSessionFromUrl(url: string): Promise<{ isRecovery: boolean } | null> {
+  const { params, errorCode } = getQueryParams(url);
+  if (errorCode) throw new Error(errorCode);
+
+  const { access_token, refresh_token, type } = params;
+  if (!access_token || !refresh_token) {
+    return null;
+  }
+
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+
+  if (sessionError) throw sessionError;
+  return { isRecovery: type === 'recovery' };
 }
 
 /**
@@ -140,28 +230,15 @@ export async function signInWithGoogle() {
   if (error) throw error;
   if (!data.url) throw new Error('No OAuth URL returned from Supabase');
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
-  if (result.type !== 'success' || !result.url) {
-    if (result.type === 'cancel' || result.type === 'dismiss') {
+  if (authResult.type !== 'success' || !authResult.url) {
+    if (authResult.type === 'cancel' || authResult.type === 'dismiss') {
       throw new Error('Google sign-in was cancelled');
     }
     throw new Error('Google sign-in failed');
   }
 
-  const { params, errorCode } = getQueryParams(result.url);
-  if (errorCode) throw new Error(errorCode);
-
-  const { access_token, refresh_token } = params;
-  if (!access_token || !refresh_token) {
-    throw new Error('No session tokens returned from Google sign-in');
-  }
-
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  });
-
-  if (sessionError) throw sessionError;
-  return sessionData;
+  const sessionResult = await setSessionFromUrl(authResult.url);
+  if (!sessionResult) throw new Error('No session tokens returned from Google sign-in');
 }

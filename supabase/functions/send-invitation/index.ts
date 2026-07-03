@@ -1,8 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
-// Resend API client
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+// Gmail SMTP credentials (an App Password, not your normal Gmail password -
+// generate one at https://myaccount.google.com/apppasswords)
+const GMAIL_ADDRESS = Deno.env.get('GMAIL_ADDRESS') || '';
+const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') || '';
 
 // CORS headers
 const corsHeaders = {
@@ -179,71 +182,59 @@ If you didn't expect this invitation, you can safely ignore this email.
 This email was sent by Legate on behalf of ${ownerName}.
     `;
 
-    // Send email using Resend
-    if (!RESEND_API_KEY) {
-      console.warn('RESEND_API_KEY not set. Email will not be sent.');
+    // Send email via Gmail SMTP
+    if (!GMAIL_ADDRESS || !GMAIL_APP_PASSWORD) {
+      console.warn('GMAIL_ADDRESS/GMAIL_APP_PASSWORD not set. Email will not be sent.');
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Invitation saved but email not sent. RESEND_API_KEY is not configured.',
+        JSON.stringify({
+          success: true,
+          message: 'Invitation saved but email not sent. Gmail SMTP is not configured.',
           invitationSaved: true
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    try {
-      // Send email via Resend API
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
+    const client = new SMTPClient({
+      connection: {
+        hostname: 'smtp.gmail.com',
+        port: 465,
+        tls: true,
+        auth: {
+          username: GMAIL_ADDRESS,
+          password: GMAIL_APP_PASSWORD,
         },
-        body: JSON.stringify({
-          from: 'Legate <onboarding@resend.dev>', // Update this with your verified domain
-          to: email,
-          subject: subject,
-          html: htmlBody,
-          text: textBody,
-        }),
+      },
+    });
+
+    try {
+      await client.send({
+        from: `Legate <${GMAIL_ADDRESS}>`,
+        to: email,
+        subject: subject,
+        html: htmlBody,
+        content: textBody,
       });
+      await client.close();
 
-      const resendData = await resendResponse.json();
-
-      if (!resendResponse.ok) {
-        console.error('Resend API error:', resendData);
-        // Still return success since invitation is saved
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            message: 'Invitation saved but email failed to send.',
-            invitationSaved: true,
-            emailError: resendData.message || 'Unknown error'
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      console.log('Email sent successfully via Resend:', resendData);
+      console.log('Email sent successfully via Gmail SMTP');
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: 'Invitation email sent successfully!',
           invitationSaved: true,
           emailSent: true,
-          emailId: resendData.id
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } catch (emailError) {
-      console.error('Error sending email via Resend:', emailError);
+      console.error('Error sending email via Gmail SMTP:', emailError);
       // Still return success since invitation is saved
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: 'Invitation saved but email failed to send.',
           invitationSaved: true,
           emailError: emailError.message
