@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,9 @@ import {
   setBiometricLockEnabled,
   getNotificationsEnabled,
   setNotificationsEnabled,
+  getAutoLockSeconds,
+  setAutoLockSeconds,
+  AUTO_LOCK_OPTIONS,
 } from '../../services/appSettings';
 import { alert } from '../../components/AppAlert';
 
@@ -24,11 +27,14 @@ export default function SettingsScreen() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
+  const [autoLockSeconds, setAutoLockSecondsState] = useState(60);
+  const [showAutoLockPicker, setShowAutoLockPicker] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
     getBiometricLockEnabled().then(setBiometricEnabledState);
     getNotificationsEnabled().then(setNotificationsEnabledState);
+    getAutoLockSeconds().then(setAutoLockSecondsState);
   }, []);
 
   const handleToggleBiometric = async (value: boolean) => {
@@ -44,6 +50,12 @@ export default function SettingsScreen() {
     }
     setBiometricEnabledState(value);
     await setBiometricLockEnabled(value);
+  };
+
+  const handleSelectAutoLock = async (seconds: number) => {
+    setAutoLockSecondsState(seconds);
+    setShowAutoLockPicker(false);
+    await setAutoLockSeconds(seconds);
   };
 
   const handleToggleNotifications = async (value: boolean) => {
@@ -62,16 +74,20 @@ export default function SettingsScreen() {
         .eq('id', user.id)
         .single();
 
+      const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+
       if (data) {
         setUserProfile({
           ...data,
           email: user.email || data.email,
+          avatarUrl,
         });
       } else {
         // Fallback to auth user data
         setUserProfile({
           full_name: user.user_metadata?.full_name || 'User',
           email: user.email || '',
+          avatarUrl,
         });
       }
     } catch (error) {
@@ -82,6 +98,7 @@ export default function SettingsScreen() {
         setUserProfile({
           full_name: user.user_metadata?.full_name || 'User',
           email: user.email || '',
+          avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         });
       }
     }
@@ -123,9 +140,13 @@ export default function SettingsScreen() {
       <View style={styles.header}>
         <View style={styles.profileSection}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {userProfile?.full_name ? getInitials(userProfile.full_name) : 'U'}
-            </Text>
+            {userProfile?.avatarUrl ? (
+              <Image source={{ uri: userProfile.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {userProfile?.full_name ? getInitials(userProfile.full_name) : 'U'}
+              </Text>
+            )}
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
@@ -161,6 +182,26 @@ export default function SettingsScreen() {
               thumbColor={biometricEnabled ? colors.gold : colors.textMuted}
             />
           </View>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowAutoLockPicker(true)}
+          >
+            <View style={[styles.settingRowLeft, styles.settingRowLeftFlex]}>
+              <Text style={styles.settingIcon}>⏱️</Text>
+              <View style={styles.settingRowTextFlex}>
+                <Text style={styles.settingRowLabel}>Auto-lock</Text>
+                <Text style={styles.settingRowHint} numberOfLines={2}>
+                  Lock after inactivity for this time
+                </Text>
+              </View>
+            </View>
+            <View style={styles.settingRowValueSpaced}>
+              <Text style={styles.settingRowValue}>
+                {AUTO_LOCK_OPTIONS.find((o) => o.seconds === autoLockSeconds)?.shortLabel || `${autoLockSeconds}s`} ›
+              </Text>
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
@@ -279,6 +320,47 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Auto-lock Picker Modal */}
+      <Modal
+        visible={showAutoLockPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowAutoLockPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickerModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAutoLockPicker(false)}
+        >
+          <View style={styles.pickerModalContent}>
+            <Text style={styles.pickerModalTitle}>Auto-lock</Text>
+            {AUTO_LOCK_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.seconds}
+                style={[
+                  styles.pickerOption,
+                  autoLockSeconds === option.seconds && styles.pickerOptionSelected,
+                ]}
+                onPress={() => handleSelectAutoLock(option.seconds)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.pickerOptionText,
+                    autoLockSeconds === option.seconds && styles.pickerOptionTextSelected,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {autoLockSeconds === option.seconds && (
+                  <Text style={styles.pickerCheckmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -310,6 +392,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.gold,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontFamily: 'serif',
@@ -374,6 +461,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  settingRowLeftFlex: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingRowTextFlex: {
+    flex: 1,
+  },
   settingIcon: {
     fontSize: 20,
   },
@@ -389,6 +483,12 @@ const styles = StyleSheet.create({
   settingRowValue: {
     fontSize: 13,
     color: colors.textSecondary,
+    flexShrink: 0,
+  },
+  settingRowValueSpaced: {
+    paddingRight: 16,
+    height: 31,
+    justifyContent: 'center',
   },
   signOutRow: {
     flexDirection: 'row',
@@ -404,5 +504,54 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: 14,
     color: colors.error,
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerModalContent: {
+    backgroundColor: colors.cream,
+    borderRadius: 20,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  pickerModalTitle: {
+    fontFamily: 'serif',
+    fontSize: 22,
+    fontWeight: '400',
+    color: colors.navy,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  pickerOption: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickerOptionSelected: {
+    backgroundColor: colors.navy,
+    borderColor: colors.gold,
+  },
+  pickerOptionText: {
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  pickerOptionTextSelected: {
+    color: colors.gold,
+    fontWeight: '500',
+  },
+  pickerCheckmark: {
+    fontSize: 18,
+    color: colors.gold,
+    fontWeight: 'bold',
   },
 });

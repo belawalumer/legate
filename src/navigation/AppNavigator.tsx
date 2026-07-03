@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { colors } from '../constants/theme';
 import SplashScreen from '../screens/splash/SplashScreen';
 import AppLockScreen from '../screens/auth/AppLockScreen';
-import { getBiometricLockEnabled } from '../services/appSettings';
+import { getBiometricLockEnabled, getAutoLockSeconds } from '../services/appSettings';
 import { isBiometricAvailable } from '../services/auth';
 
 // Screens (we'll create these)
@@ -168,6 +168,7 @@ export default function AppNavigator() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const [locked, setLocked] = useState(false);
   const appState = useRef(AppState.currentState);
+  const backgroundedAt = useRef<number | null>(null);
 
   useEffect(() => {
     // Check if user has seen onboarding
@@ -194,14 +195,32 @@ export default function AppNavigator() {
     checkLockOnLaunch();
 
     const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      const goingToBackground =
+        appState.current === 'active' && nextState.match(/inactive|background/);
       const cameFromBackground =
         appState.current.match(/inactive|background/) && nextState === 'active';
       appState.current = nextState;
 
+      if (goingToBackground) {
+        backgroundedAt.current = Date.now();
+        return;
+      }
+
       if (cameFromBackground) {
         const enabled = await getBiometricLockEnabled();
         const available = enabled && (await isBiometricAvailable());
-        if (available) setLocked(true);
+        if (!available) {
+          backgroundedAt.current = null;
+          return;
+        }
+
+        const autoLockSeconds = await getAutoLockSeconds();
+        const elapsedMs = backgroundedAt.current ? Date.now() - backgroundedAt.current : Infinity;
+        backgroundedAt.current = null;
+
+        if (elapsedMs >= autoLockSeconds * 1000) {
+          setLocked(true);
+        }
       }
     });
 
