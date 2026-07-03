@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -36,11 +36,16 @@ export default function SettingsScreen() {
   const [showAutoLockPicker, setShowAutoLockPicker] = useState(false);
 
   useEffect(() => {
-    loadUserProfile();
     getBiometricLockEnabled().then(setBiometricEnabledState);
     getNotificationsEnabled().then(setNotificationsEnabledState);
     getAutoLockSeconds().then(setAutoLockSecondsState);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUserProfile();
+    }, [])
+  );
 
   const handleToggleBiometric = async (value: boolean) => {
     if (value) {

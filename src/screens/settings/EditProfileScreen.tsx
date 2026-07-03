@@ -48,7 +48,9 @@ export default function EditProfileScreen() {
     setSavingName(true);
     try {
       await updateFullName(fullName.trim());
-      alert('Success', 'Your name has been updated.');
+      alert('Success', 'Your name has been updated.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
     } catch (error: any) {
       alert('Error', error.message || 'Could not update name');
     } finally {
