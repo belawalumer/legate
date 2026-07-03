@@ -165,9 +165,10 @@ export default function VaultItemDetailScreen() {
           <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>
-            {categoryInfo?.icon} {categoryInfo?.label || item.title}
-          </Text>
+          <View style={styles.headerTitleRow}>
+            {categoryInfo?.icon && <Ionicons name={categoryInfo.icon} size={20} color={colors.gold} />}
+            <Text style={styles.headerTitle}>{categoryInfo?.label || item.title}</Text>
+          </View>
           <Text style={styles.headerSubtitle}>
             {isViewingOtherVault ? 'Read-only' : 'View account details'}
           </Text>
@@ -363,6 +364,11 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
     fontFamily: 'serif',

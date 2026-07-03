@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
 import { encryptData, decryptData } from '../../services/encryption';
 import { VaultCategory } from '../../types';
 import { colors, borderRadius } from '../../constants/theme';
-import { PLAN_FEATURES } from '../../constants';
+import { PLAN_FEATURES, VAULT_CATEGORIES } from '../../constants';
 import { getUserPlan, getVaultItemCount, hasReachedLimit, PLAN_LABELS } from '../../services/plan';
 import { alert } from '../../components/AppAlert';
 
@@ -177,7 +178,7 @@ export default function AddVaultItemScreen() {
     }
   };
 
-  const categoryInfo = category ? require('../../constants').VAULT_CATEGORIES.find((c: any) => c.value === category) : null;
+  const categoryInfo = category ? VAULT_CATEGORIES.find((c) => c.value === category) : null;
 
   return (
     <View style={styles.container}>
@@ -189,9 +190,10 @@ export default function AddVaultItemScreen() {
           <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>
-            {categoryInfo?.icon} {categoryInfo?.label || category || 'Add Item'}
-          </Text>
+          <View style={styles.headerTitleRow}>
+            {categoryInfo?.icon && <Ionicons name={categoryInfo.icon} size={20} color={colors.gold} />}
+            <Text style={styles.headerTitle}>{categoryInfo?.label || category || 'Add Item'}</Text>
+          </View>
           <Text style={styles.headerSubtitle}>
             {isEditMode 
               ? 'Edit item details'
@@ -863,6 +865,11 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
     fontFamily: 'serif',

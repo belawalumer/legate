@@ -627,7 +627,10 @@ export default function CategoryItemsScreen() {
           <Text style={styles.backBtnText}>‹</Text>
         </TouchableOpacity>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>{categoryInfo?.icon} {categoryInfo?.label}</Text>
+          <View style={styles.headerTitleRow}>
+            {categoryInfo?.icon && <Ionicons name={categoryInfo.icon} size={20} color={colors.gold} />}
+            <Text style={styles.headerTitle}>{categoryInfo?.label}</Text>
+          </View>
           <Text style={styles.headerSubtitle}>
             {initialLoading
               ? 'Loading…'
@@ -721,6 +724,11 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
     fontFamily: 'serif',

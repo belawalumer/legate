@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { VAULT_CATEGORIES } from '../../constants';
 import { VaultCategory } from '../../types';
 import { supabase } from '../../services/supabase';
@@ -113,7 +114,7 @@ export default function VaultScreen() {
             <Text style={styles.countBadgeText}>{count}</Text>
           </View>
         )}
-        <Text style={styles.categoryIcon}>{item.icon}</Text>
+        <Ionicons name={item.icon} size={24} color={colors.gold} style={styles.categoryIcon} />
         <Text style={styles.categoryLabel}>{item.label}</Text>
       </TouchableOpacity>
     );
@@ -204,7 +205,6 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   categoryIcon: {
-    fontSize: 24,
     marginBottom: 6,
   },
   categoryLabel: {
