@@ -1,101 +1,140 @@
 # Legate — Functionality Overview
 
-Legate is a digital estate/legacy vault app (Expo/React Native, bundle id `com.legate.app`). It lets a **vault owner** securely record financial accounts, legal documents, digital assets, and final wishes, and designate **trusted persons** who can eventually request access after the owner's death.
+Legate is a digital estate/legacy vault app (Expo/React Native, bundle id `com.legate.app`). It lets a **vault owner** securely record financial accounts, legal documents, digital assets, and final wishes, and designate **trusted persons** who can request access after the owner's death — and once unlocked, gives those trusted persons a shared workspace to wind down the estate together.
 
-This document reflects the actual state of the code as of 2026-07-03, not the intended end-state — sections below are explicit about what's live vs. stubbed.
+This document reflects the actual state of the code, not the intended end-state — sections below are explicit about what's live vs. still missing.
 
 ## Tech Stack
 
 - **Client**: Expo / React Native, TypeScript, React Navigation (stack + bottom tabs)
-- **Backend**: Supabase (Postgres + Auth + Row Level Security + Edge Functions)
+- **Backend**: Supabase (Postgres + Auth + Row Level Security + Storage + Edge Functions)
 - **Email**: Resend, via a Supabase Edge Function
 - **Design system**: navy (`#1B2A4A`) / gold (`#C9A84C`) / cream (`#F9F7F4`), serif headings — defined in `src/constants/theme.ts`
 
+See [README.md](./README.md) for how to stand up a Supabase project from scratch to run this app.
+
 ## Navigation Flow
 
-`App.tsx` → `AppNavigator` (`src/navigation/AppNavigator.tsx`), which switches on auth state (`useAuth`) and an AsyncStorage `hasSeenOnboarding` flag:
+`App.tsx` → `AppNavigator` (`src/navigation/AppNavigator.tsx`), which switches on auth state (`useAuth`), an AsyncStorage `hasSeenOnboarding` flag, and a biometric app-lock gate:
 
 - Splash (min. 2s) while auth/onboarding state resolves
 - Unauthenticated, no onboarding seen → Onboarding → Auth (Login/SignUp)
 - Unauthenticated, onboarding seen → Auth directly
-- Authenticated → Main bottom tabs (**Home, Vault, Trusted, Documents, Settings**) + modal/stack screens (`VaultItemDetail`, `AddVaultItem`, `CategoryItems`, `DeathVerification`, `TrustedPersons`)
+- Authenticated, biometric lock enabled → `AppLockScreen` (must pass Face ID/Touch ID) before anything else renders, on both cold launch and returning from background
+- Authenticated → Main bottom tabs (**Home, Vault, Trusted, Documents, Settings**) + a large set of stack screens (vault item CRUD, death verification, checklist, trusted persons, documents, subscriptions, the Heir Workspace, and the paywall)
 
 ## What Works Today
 
 ### Auth
-- Email/password sign up and sign in (Supabase Auth)
-- Magic link sign-in (OTP email)
+- Email/password, magic-link (OTP), and **Google OAuth** sign-in/sign-up (via `expo-auth-session` + Supabase's Google provider)
 - Sign out
 - A `user_profiles` row is auto-created on signup via a Postgres trigger (`handle_new_user`)
+- Biometric app-lock: if enabled, Face ID/Touch ID is required on cold launch and whenever the app returns from the background (`src/screens/auth/AppLockScreen.tsx`)
+- When someone signs up choosing "I was invited as a trusted person," any pending `trusted_persons` invite matching their email is automatically accepted and linked (`acceptPendingTrustedPersonInvites` in `services/auth.ts`, called from `useAuth` on every session start)
 
 ### Vault (core feature)
 - 11 categories: banking, investments, insurance, loans_debts, subscriptions, real_estate, vehicles, important_contacts, digital_assets, legal_documents, final_wishes
 - Add / edit / delete vault items, each with category-specific fields
 - Sensitive fields (account numbers, routing numbers, wallet addresses, etc.) are masked in list/detail views
-- Item data is obfuscated client-side before storage (see **Encryption caveat** below)
-- Vault health score: `% of the 11 categories that have at least one item`, shown on Home and computed (but not surfaced) on the Vault screen
+- **Real AES-256-CBC encryption** of item data (`services/encryption.ts`) — a random IV per encryption, device-bound key stored in the platform keychain/keystore (`expo-secure-store`). Backward-compatible: still decrypts data written under the old placeholder scheme.
+- Vault health score: `% of the 11 categories that have at least one item`, shown on Home and on the Vault screen
+- New items are blocked past the current plan's item limit, with an upgrade prompt
 
 ### Trusted Persons
 - Invite by name/email/relationship (spouse, child, executor, other)
 - Duplicate-invite check per vault owner
 - Invitation triggers the `send-invitation` Edge Function (Resend email), degrading gracefully (invite still saved) if email fails or `RESEND_API_KEY` isn't configured
-- Status badges: Invited / Accepted / Declined
+- Status badges: Invited / Accepted / Declined — status flips to Accepted automatically when the invitee signs up or logs in with the matching email
+- New invites are blocked past the current plan's trusted-person limit, with an upgrade prompt
+- Read-only view of another vault owner's trusted-person list once that vault is unlocked (no invite/manage controls in that context)
+
+### Death Verification (two-key unlock)
+- A trusted person can request a vault unlock by uploading a death certificate (stored in a private Supabase Storage bucket)
+- A **second, different** trusted person must confirm the request before anything else happens — enforced server-side (a trusted person can never confirm their own request)
+- Once confirmed, a 72-hour waiting period starts (`DEATH_VERIFICATION_WAITING_PERIOD_HOURS`); the vault only actually unlocks once that period has elapsed — checked both client-side and in Postgres RLS (`is_vault_unlocked_for`), not just by a status flag
+- A live status timeline shows each step: request submitted → second confirmation → waiting period → unlocked
+- The vault owner can reject/cancel a request on their own vault (e.g. a false alarm)
+- Reachable from Settings → "Vault Unlock Requests" (`src/screens/estate/DeathVerificationScreen.tsx`)
+
+### Documents
+- Upload estate documents (wills, deeds, etc.) to a private Supabase Storage bucket, tied to the `documents` table
+- List, open (via a short-lived signed URL), and delete, for the vault owner
+- Blocked entirely on plans without document-upload access
+- Read-only for trusted persons once the vault is unlocked
+
+### Estate Checklist
+- Auto-generated from vault contents the moment a vault unlocks (`generateEstateTasks` in `services/checklist.ts`) — e.g. a banking item generates "Notify {bank}," an insurance item generates "File claim with {provider}," idempotent so it's safe to regenerate
+- Filterable list (All / Pending / Done / Mine) with a progress bar, tap to toggle complete
+- Reachable from Settings (owner's own vault) or via the Heir Workspace (another unlocked vault)
+
+### Family / Heir Workspace
+- Once a vault is unlocked, an "Enter Family Workspace" button appears on the death-verification status card
+- Shows the vault owner's name, a stacked-avatar chip of accepted trusted persons, a task-completion stat, a monthly-subscription-savings stat, and a list of urgent (high-priority, incomplete) tasks
+- Quick-action grid links into the real Vault, Checklist, Trusted Persons ("Contacts"), Documents, and Subscriptions screens — all in read-only-except-where-allowed mode for the trusted person
+- Activity Log quick action is present but shows a "Coming Soon" message — no audit-trail feature exists yet (see Known Gaps)
+
+### Subscription Tracker
+- Lists subscription-category vault items with monthly cost and a cancel/done toggle
+- Computes total monthly savings from cancelled subscriptions
+- A trusted person can toggle a subscription cancelled on an unlocked vault (narrowly scoped: they can only rewrite that one vault item's data, only for subscription-category items, only post-unlock — enforced by an RLS policy + trigger, not just the UI)
+- Reachable from Settings (owner) or the Heir Workspace (trusted person)
+
+### Plan Limits & Paywall
+- `user_profiles.subscription_plan` (free/essential/family/legacy) is the source of truth, shown correctly in Settings and used to gate item count, trusted-person count, and document upload
+- A Paywall screen (Settings → "Upgrade Plan") shows the three paid tiers with real pricing from the design; selecting one writes `subscription_plan` directly
+- **No real payment processing is connected** — "upgrading" is a direct database write with an explicit note in the confirmation dialog that no charge was made. This is intentionally scoped as enforcement + UI only, pending a real payment provider decision.
 
 ### Home Dashboard
 - Personalized greeting, vault health ring, item/trusted/category stat cards
 
 ### Settings
-- Profile display, sign out, "Reset Onboarding" (dev utility)
+- Profile display with real plan badge, sign out, "Reset Onboarding" (dev utility)
+- Biometric Lock and Notifications are real, persisted toggles (SecureStore and AsyncStorage respectively)
+- Notifications is a stored preference only — see Known Gaps, there's no push notification infrastructure behind it
 
-## What's Stubbed or Non-Functional
-
-These exist as screens/routes/schema but have no real logic behind them yet:
+## Known Gaps / Not Yet Built
 
 | Area | State |
 |---|---|
-| **Documents tab** | Title + subtitle only. No upload, despite `expo-document-picker` being installed and a `documents` table existing. |
-| **Death Verification** | Title + subtitle only. No certificate submission, no approval workflow. Not linked from any screen (only reachable by direct navigation). |
-| **Estate Checklist** | Title + subtitle only. Not even registered in the navigator — currently unreachable in the app. |
-| **"Two-key" dual approval** | Trusted Persons screen claims *"Two trusted people must confirm the request before your vault unlocks,"* but the schema only has one optional `secondary_confirmation_by` column and no enforcement logic anywhere. |
-| **Biometric lock** | Settings toggle is local UI state only. `isBiometricAvailable`/`authenticateWithBiometrics` are implemented in `services/auth.ts` but never called — no app-lock gate exists. |
-| **Subscription plan limits** | `PLAN_FEATURES` (free/essential/family/legacy caps) is fully defined in constants but never checked before adding items or inviting people. UI hardcodes "Essential Plan" regardless of actual plan. |
-| **Settings rows** | Auto-lock, Notifications, Upgrade Plan, Privacy Policy, Terms of Service all render but have no `onPress` handlers. |
-| **Sign-up owner/trusted toggle** | Selecting "I was invited as a trusted person" has no effect — not passed to signup, and accepting an invite doesn't link the new account to the inviter's vault. |
+| **Activity Log** | No audit trail exists. The Heir Workspace's "Activity" quick action shows a placeholder "Coming Soon" alert. Building this for real needs a new table and every write path (vault items, checklist, trusted persons, documents) to start logging events — deliberately deferred as its own follow-up task. |
+| **Real payments** | The Paywall updates `subscription_plan` directly with no payment processor (Stripe, RevenueCat, App Store/Play Store IAP) integrated. Needed before this could charge real users. |
+| **Auto-lock timer** | Only "lock on background/launch" is implemented. A separate idle-timeout auto-lock (e.g. "lock after 5 minutes of inactivity while foregrounded") does not exist; the old fake "5 min" UI row was removed rather than left misleading. |
+| **Push notifications** | The Notifications toggle only stores a local preference — no Expo push tokens, APNs/FCM, or server-side triggering exists yet. |
+| **Privacy Policy / Terms of Service rows** | Still render with no `onPress` handler (no content to link to yet). |
+| **`SUBSCRIPTION_PLATFORMS`** constant | Still defined but unused (the subscription form uses free text instead of a picker). |
 
-## ⚠️ Encryption Caveat (important)
+## ⚠️ Security Notes
 
-`src/services/encryption.ts` does **not** implement real encryption. It computes a SHA-256 integrity hash and stores `hash:base64(plaintext)`. This is trivially reversible by anyone with the stored string — it is obfuscation, not confidentiality. Data protection currently relies entirely on Supabase Row Level Security (server-side), not on this client-side layer. The code comments already flag this as a placeholder for real AES-256 encryption. **This should be prioritized before handling real user data.**
+- **Encryption**: real AES-256-CBC now, replacing the earlier SHA-256/base64 placeholder. The key lives only in the device's secure storage (Keychain/Keystore) — if the app is uninstalled or the device resets without that entry surviving, previously-encrypted vault items become unrecoverable. This is treated as an accepted tradeoff (see project decision log / conversation history), not an oversight.
+- **Trusted-person write access is intentionally narrow.** Post-unlock, a trusted person can toggle `is_cancelled` on subscription items (which requires letting them rewrite that item's whole `encrypted_data` blob, since Postgres can't inspect ciphertext — but they already have full plaintext read access at that point, so this isn't a new exposure) and accept their own pending invite. Every other write (vault items in general, other trusted persons' rows, death-verification fields beyond their own confirmation) is blocked by RLS policies paired with `BEFORE UPDATE` trigger guards, not just client-side checks.
 
 ## Data Model (Supabase `schema.sql`)
 
-- `user_profiles` — extends `auth.users`, `full_name`, `subscription_plan`
+- `user_profiles` — extends `auth.users`: `full_name`, `subscription_plan`
 - `vault_items` — `user_id`, `category`, `title`, `encrypted_data`, `metadata`
 - `trusted_persons` — `vault_owner_id`, `email`, `full_name`, `status`, `role`
-- `death_verifications` — `vault_owner_id`, `requested_by`, `secondary_confirmation_by`, `status`, `waiting_period_ends_at` (unused by app code)
-- `estate_tasks` — auto-checklist model (unused by app code)
-- `documents` — file uploads model (unused by app code)
+- `death_verifications` — `vault_owner_id`, `requested_by`, `secondary_confirmation_by`, `status` (`awaiting_confirmation` → `confirmed` → `approved`, or `rejected`), `waiting_period_ends_at`
+- `estate_tasks` — auto-generated checklist, `assigned_to`/`completed_by` reference `trusted_persons`
+- `documents` — file metadata; actual files live in the `documents` Storage bucket
 
-All tables have RLS: owners get full CRUD on their own data; trusted persons get read access only after an *approved* `death_verifications` row exists.
+Plus two private Storage buckets (`death-certificates`, `documents`) created and policy-protected by the same schema script.
+
+All tables have RLS. Owners get full CRUD on their own data. Trusted persons get scoped access:
+- Read-only on `vault_items`/`documents`/`estate_tasks` once `is_vault_unlocked_for(owner_id)` is true (confirmed + waiting period elapsed, checked at query time)
+- Write access to `estate_tasks` (to check off tasks) once unlocked
+- Write access to `vault_items.encrypted_data` only for subscription-category items, only once unlocked
+- Can accept their own pending `trusted_persons` invite (status `pending` → `accepted` only, nothing else)
+- Can supply the second confirmation on a `death_verifications` request that isn't their own, while it's `awaiting_confirmation`
 
 ## Backend
 
 - **`services/supabase.ts`** — Supabase client, session persisted in AsyncStorage
-- **`services/auth.ts`** — auth wrapper + unused biometric helpers
-- **`services/encryption.ts`** — see caveat above
+- **`services/auth.ts`** — email/password, magic-link, and Google OAuth sign-in; biometric helpers; auto-accepts pending trusted-person invites
+- **`services/encryption.ts`** — AES-256-CBC, see Security Notes above
+- **`services/deathVerification.ts`** — request/confirm/reject a vault unlock, certificate upload, unlock-status check
+- **`services/checklist.ts`** — auto-generates and manages `estate_tasks`
+- **`services/documents.ts`** — upload/list/open/delete estate documents
+- **`services/subscriptions.ts`** — subscription list, cancellation toggle, savings calculation
+- **`services/plan.ts`** — reads/writes the user's plan, counts against `PLAN_FEATURES` limits
+- **`services/appSettings.ts`** — persists the biometric-lock and notifications toggles
 - **Edge Function `send-invitation`** — validates caller owns the vault, sends a branded HTML invite email via Resend, no-ops gracefully without a configured API key
-
-## Known Cleanup Items
-
-- Magic-link redirect scheme is still `householdvault://auth/callback` — a leftover from an earlier project name, inconsistent with `com.legate.app` / slug `legate`
-- `SUBSCRIPTION_PLATFORMS` constant is defined but unused (subscriptions use free text instead)
-- `ChecklistScreen` is orphaned (not in the navigator)
-
-## Suggested Next Development Priorities
-
-1. **Real encryption** — replace the SHA-256/base64 scheme with actual AES-256 (or rely solely on RLS + Supabase-managed encryption at rest, if client-side encryption is dropped as a goal).
-2. **Death verification flow** — certificate upload, notification to trusted persons, approval/waiting-period logic, and actually wiring the "two-key" claim to real dual-confirmation logic (or removing the claim from copy).
-3. **Documents tab** — wire up `expo-document-picker` + Supabase Storage upload, tied to the existing `documents` table.
-4. **Estate checklist** — decide whether to keep or remove; if keeping, register the screen and implement task generation from vault contents.
-5. **Plan enforcement** — check `PLAN_FEATURES` limits before add-item/invite actions; show the user's real plan instead of hardcoded "Essential."
-6. **Settings functionality** — wire up biometric app-lock, auto-lock timer, and notification preferences.
-7. **Fix sign-up owner/trusted linkage** — when someone signs up after being invited, connect their new account to the inviting vault owner's `trusted_persons` row.
