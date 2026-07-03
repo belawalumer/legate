@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
@@ -7,16 +7,35 @@ import { colors, borderRadius, spacing } from '../../constants/theme';
 import { VAULT_CATEGORIES } from '../../constants';
 import { Svg, Circle } from 'react-native-svg';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [userName, setUserName] = useState('User');
   const [healthScore, setHealthScore] = useState(0);
+  const [displayedHealthScore, setDisplayedHealthScore] = useState(0);
   const [stats, setStats] = useState({ items: 0, trusted: 0, categories: 0 });
   const [items, setItems] = useState<any[]>([]);
+  const healthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const listenerId = healthAnim.addListener(({ value }) => {
+      setDisplayedHealthScore(Math.round(value));
+    });
+    return () => healthAnim.removeListener(listenerId);
+  }, [healthAnim]);
+
+  useEffect(() => {
+    Animated.timing(healthAnim, {
+      toValue: healthScore,
+      duration: 900,
+      useNativeDriver: false,
+    }).start();
+  }, [healthScore]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -99,7 +118,11 @@ export default function HomeScreen() {
   };
 
   const circumference = 2 * Math.PI * 30; // radius = 30
-  const strokeDashoffset = circumference - (healthScore / 100) * circumference;
+  const animatedStrokeDashoffset = healthAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circumference, 0],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View style={styles.container}>
@@ -120,7 +143,7 @@ export default function HomeScreen() {
                 strokeWidth={6}
                 fill="none"
               />
-              <Circle
+              <AnimatedCircle
                 cx={36}
                 cy={36}
                 r={30}
@@ -128,12 +151,12 @@ export default function HomeScreen() {
                 strokeWidth={6}
                 fill="none"
                 strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
+                strokeDashoffset={animatedStrokeDashoffset}
                 strokeLinecap="round"
               />
             </Svg>
             <View style={styles.healthRingLabel}>
-              <Text style={styles.healthScoreNum}>{healthScore}</Text>
+              <Text style={styles.healthScoreNum}>{displayedHealthScore}</Text>
               <Text style={styles.healthScorePct}>%</Text>
             </View>
           </View>

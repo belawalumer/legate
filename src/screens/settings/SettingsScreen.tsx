@@ -486,7 +486,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   settingRowValueSpaced: {
-    paddingRight: 16,
     height: 31,
     justifyContent: 'center',
   },
