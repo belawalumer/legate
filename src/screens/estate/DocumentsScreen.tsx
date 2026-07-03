@@ -9,19 +9,13 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
-import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import { colors, borderRadius } from '../../constants/theme';
 import { getCurrentUser } from '../../services/auth';
 import { listDocuments, uploadDocument, getDocumentSignedUrl, deleteDocument } from '../../services/documents';
 import { Document } from '../../types';
-import { PLAN_FEATURES } from '../../constants';
-import { getUserPlan, PLAN_LABELS } from '../../services/plan';
-import { RootStackParamList } from '../../navigation/AppNavigator';
 import { alert } from '../../components/AppAlert';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 function fileIcon(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase();
@@ -33,7 +27,6 @@ function fileIcon(name: string): string {
 
 export default function DocumentsScreen() {
   const route = useRoute();
-  const navigation = useNavigation<NavigationProp>();
   const params = route.params as { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
   const isViewingOtherVault = !!params?.vaultOwnerId;
 
@@ -73,19 +66,6 @@ export default function DocumentsScreen() {
     try {
       const user = await getCurrentUser();
       if (!user) return;
-
-      const plan = await getUserPlan(user.id);
-      if (!PLAN_FEATURES[plan].documentUpload) {
-        alert(
-          'Upgrade Required',
-          `Document upload isn't available on the ${PLAN_LABELS[plan]} plan. Upgrade to store estate documents.`,
-          [
-            { text: 'Not Now', style: 'cancel' },
-            { text: 'Upgrade', onPress: () => navigation.navigate('Paywall') },
-          ]
-        );
-        return;
-      }
 
       const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.[0]) return;

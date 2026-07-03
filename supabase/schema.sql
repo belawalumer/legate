@@ -79,10 +79,29 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT,
-  subscription_plan TEXT DEFAULT 'free' CHECK (subscription_plan IN ('free', 'essential', 'family', 'legacy')),
+  subscription_plan TEXT DEFAULT 'free' CHECK (subscription_plan IN ('free', 'monthly', 'yearly')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration: collapse the old four-tier plan model (free/essential/family/legacy)
+-- down to (free/monthly/yearly). Safe to re-run - only touches rows still on a
+-- retired plan name and only replaces the constraint if it has the old shape.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_profiles' AND column_name = 'subscription_plan'
+  ) THEN
+    UPDATE user_profiles
+    SET subscription_plan = 'monthly'
+    WHERE subscription_plan IN ('essential', 'family', 'legacy');
+
+    ALTER TABLE user_profiles DROP CONSTRAINT IF EXISTS user_profiles_subscription_plan_check;
+    ALTER TABLE user_profiles ADD CONSTRAINT user_profiles_subscription_plan_check
+      CHECK (subscription_plan IN ('free', 'monthly', 'yearly'));
+  END IF;
+END $$;
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_vault_items_user_id ON vault_items(user_id);

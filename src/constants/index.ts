@@ -30,40 +30,12 @@ export const SUBSCRIPTION_PLATFORMS = [
   'Other',
 ];
 
-export const PLAN_FEATURES = {
-  free: {
-    maxItems: 10,
-    maxTrustedPersons: 1,
-    documentUpload: false,
-  },
-  essential: {
-    maxItems: -1, // unlimited
-    maxTrustedPersons: 3,
-    documentUpload: true,
-  },
-  family: {
-    maxItems: -1,
-    maxTrustedPersons: 5,
-    documentUpload: true,
-    checklist: true,
-    priorityUnlock: true,
-  },
-  legacy: {
-    maxItems: -1,
-    maxTrustedPersons: -1, // unlimited
-    documentUpload: true,
-    checklist: true,
-    priorityUnlock: true,
-    estateWorkspace: true,
-    aiTagging: true,
-    dedicatedSupport: true,
-  },
-};
+// Trusted-person cap applies globally, regardless of plan.
+export const MAX_TRUSTED_PERSONS = 3;
 
-export const PLAN_PRICING: { plan: 'essential' | 'family' | 'legacy'; priceUsdPerYear: number; tagline: string; featured?: boolean }[] = [
-  { plan: 'essential', priceUsdPerYear: 29, tagline: 'Unlimited items · 3 trusted people' },
-  { plan: 'family', priceUsdPerYear: 79, tagline: '5 trusted people · priority unlock', featured: true },
-  { plan: 'legacy', priceUsdPerYear: 149, tagline: 'Everything · AI tagging · support' },
+export const PLAN_PRICING: { plan: 'monthly' | 'yearly'; price: number; period: string; tagline: string; featured?: boolean }[] = [
+  { plan: 'monthly', price: 3.99, period: '/month', tagline: 'Unlimited items · 3 trusted people' },
+  { plan: 'yearly', price: 34.99, period: '/year', tagline: 'Unlimited items · 3 trusted people', featured: true },
 ];
 
 export const DEATH_VERIFICATION_WAITING_PERIOD_HOURS = 72;

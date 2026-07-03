@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRoute } from '@react-navigation/native';
 import { colors, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
-import { PLAN_FEATURES } from '../../constants';
-import { getUserPlan, getTrustedPersonCount, hasReachedLimit, isUnlimited, PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
-import { RootStackParamList } from '../../navigation/AppNavigator';
+import { MAX_TRUSTED_PERSONS } from '../../constants';
+import { getTrustedPersonCount } from '../../services/plan';
 import { alert } from '../../components/AppAlert';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const RELATIONSHIP_OPTIONS = [
   { value: 'spouse', label: 'Spouse' },
@@ -21,7 +17,6 @@ const RELATIONSHIP_OPTIONS = [
 
 export default function TrustedPersonsScreen() {
   const route = useRoute();
-  const navigation = useNavigation<NavigationProp>();
   const params = route.params as { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
   const isViewingOtherVault = !!params?.vaultOwnerId;
 
@@ -33,7 +28,6 @@ export default function TrustedPersonsScreen() {
   const [inviteRelationship, setInviteRelationship] = useState('other');
   const [showRelationshipPicker, setShowRelationshipPicker] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const [plan, setPlan] = useState<SubscriptionPlan>('free');
 
   useEffect(() => {
     loadTrustedPersons();
@@ -46,7 +40,6 @@ export default function TrustedPersonsScreen() {
         const user = await getCurrentUser();
         if (!user) return;
         ownerId = user.id;
-        setPlan(await getUserPlan(user.id));
       }
 
       const { data, error } = await supabase
@@ -103,17 +96,12 @@ export default function TrustedPersonsScreen() {
         return;
       }
 
-      const currentPlan = await getUserPlan(user.id);
       const trustedCount = await getTrustedPersonCount(user.id);
-      if (hasReachedLimit(trustedCount, PLAN_FEATURES[currentPlan].maxTrustedPersons)) {
+      if (trustedCount >= MAX_TRUSTED_PERSONS) {
         setInviting(false);
         alert(
           'Trusted Person Limit Reached',
-          `Your ${PLAN_LABELS[currentPlan]} plan allows up to ${PLAN_FEATURES[currentPlan].maxTrustedPersons} trusted people. Upgrade to invite more.`,
-          [
-            { text: 'Not Now', style: 'cancel' },
-            { text: 'Upgrade', onPress: () => navigation.navigate('Paywall') },
-          ]
+          `You can add up to ${MAX_TRUSTED_PERSONS} trusted people.`
         );
         return;
       }
@@ -312,20 +300,13 @@ export default function TrustedPersonsScreen() {
               <Text style={styles.addPersonText}>Invite another trusted person</Text>
             </TouchableOpacity>
 
-            {!isUnlimited(PLAN_FEATURES[plan].maxTrustedPersons) && (
-              <TouchableOpacity
-                style={styles.upgradeBanner}
-                onPress={() => navigation.navigate('Paywall')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.upgradeText}>
-                  ✦ {PLAN_LABELS[plan]} plan ·{' '}
-                  {Math.max(PLAN_FEATURES[plan].maxTrustedPersons - trustedPersons.length, 0)} more{' '}
-                  {PLAN_FEATURES[plan].maxTrustedPersons - trustedPersons.length === 1 ? 'person' : 'people'} available.{' '}
-                  <Text style={styles.upgradeLink}>Upgrade</Text> for more.
-                </Text>
-              </TouchableOpacity>
-            )}
+            <View style={styles.upgradeBanner}>
+              <Text style={styles.upgradeText}>
+                ✦ {Math.max(MAX_TRUSTED_PERSONS - trustedPersons.length, 0)} more{' '}
+                {MAX_TRUSTED_PERSONS - trustedPersons.length === 1 ? 'person' : 'people'} available.{' '}
+                Up to {MAX_TRUSTED_PERSONS} trusted people per vault.
+              </Text>
+            </View>
           </>
         )}
       </ScrollView>
@@ -606,10 +587,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.warning,
     lineHeight: 17.6,
-  },
-  upgradeLink: {
-    color: colors.navy,
-    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,

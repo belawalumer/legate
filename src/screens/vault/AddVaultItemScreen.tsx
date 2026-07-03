@@ -7,8 +7,7 @@ import { getCurrentUser } from '../../services/auth';
 import { encryptData, decryptData } from '../../services/encryption';
 import { VaultCategory } from '../../types';
 import { colors, borderRadius } from '../../constants/theme';
-import { PLAN_FEATURES, VAULT_CATEGORIES } from '../../constants';
-import { getUserPlan, getVaultItemCount, hasReachedLimit, PLAN_LABELS } from '../../services/plan';
+import { VAULT_CATEGORIES } from '../../constants';
 import { alert } from '../../components/AppAlert';
 
 export default function AddVaultItemScreen() {
@@ -116,21 +115,6 @@ export default function AddVaultItemScreen() {
           ]
         );
       } else {
-        const plan = await getUserPlan(user.id);
-        const itemCount = await getVaultItemCount(user.id);
-        if (hasReachedLimit(itemCount, PLAN_FEATURES[plan].maxItems)) {
-          setLoading(false);
-          alert(
-            'Vault Item Limit Reached',
-            `Your ${PLAN_LABELS[plan]} plan allows up to ${PLAN_FEATURES[plan].maxItems} vault items. Upgrade to add more.`,
-            [
-              { text: 'Not Now', style: 'cancel' },
-              { text: 'Upgrade', onPress: () => (navigation as any).navigate('Paywall') },
-            ]
-          );
-          return;
-        }
-
         // Insert new item
         const { error } = await supabase
           .from('vault_items')

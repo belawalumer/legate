@@ -1,14 +1,14 @@
 import { supabase } from './supabase';
-import { PLAN_FEATURES } from '../constants';
 
-export type SubscriptionPlan = keyof typeof PLAN_FEATURES;
+export type SubscriptionPlan = 'free' | 'monthly' | 'yearly';
 
 export const PLAN_LABELS: Record<SubscriptionPlan, string> = {
   free: 'Free',
-  essential: 'Essential',
-  family: 'Family',
-  legacy: 'Legacy',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
 };
+
+const VALID_PLANS: SubscriptionPlan[] = ['free', 'monthly', 'yearly'];
 
 export async function getUserPlan(userId: string): Promise<SubscriptionPlan> {
   const { data, error } = await supabase
@@ -18,7 +18,7 @@ export async function getUserPlan(userId: string): Promise<SubscriptionPlan> {
     .single();
 
   if (error || !data?.subscription_plan) return 'free';
-  return (data.subscription_plan as SubscriptionPlan) in PLAN_FEATURES
+  return VALID_PLANS.includes(data.subscription_plan as SubscriptionPlan)
     ? (data.subscription_plan as SubscriptionPlan)
     : 'free';
 }
@@ -50,13 +50,4 @@ export async function getTrustedPersonCount(userId: string): Promise<number> {
 
   if (error) throw error;
   return count || 0;
-}
-
-export function isUnlimited(limit: number): boolean {
-  return limit === -1;
-}
-
-export function hasReachedLimit(currentCount: number, limit: number): boolean {
-  if (isUnlimited(limit)) return false;
-  return currentCount >= limit;
 }

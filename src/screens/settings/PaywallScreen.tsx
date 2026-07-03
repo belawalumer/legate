@@ -9,7 +9,7 @@ import { alert } from '../../components/AppAlert';
 
 export default function PaywallScreen() {
   const navigation = useNavigation();
-  const [selectedPlan, setSelectedPlan] = useState<'essential' | 'family' | 'legacy'>('family');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [loading, setLoading] = useState(false);
 
   const handleContinue = async () => {
@@ -62,8 +62,8 @@ export default function PaywallScreen() {
                   <Text style={styles.planTagline}>{p.tagline}</Text>
                 </View>
                 <View>
-                  <Text style={styles.planPrice}>${p.priceUsdPerYear}</Text>
-                  <Text style={styles.planPeriod}>/year</Text>
+                  <Text style={styles.planPrice}>${p.price.toFixed(2)}</Text>
+                  <Text style={styles.planPeriod}>{p.period}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -75,7 +75,7 @@ export default function PaywallScreen() {
             <ActivityIndicator color={colors.navy} />
           ) : (
             <Text style={styles.continueButtonText}>
-              Continue with {PLAN_LABELS[selected.plan]} · ${selected.priceUsdPerYear}/yr
+              Continue with {PLAN_LABELS[selected.plan]} · ${selected.price.toFixed(2)}{selected.period}
             </Text>
           )}
         </TouchableOpacity>
