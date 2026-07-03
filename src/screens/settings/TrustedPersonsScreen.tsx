@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, borderRadius } from '../../constants/theme';
@@ -8,6 +8,7 @@ import { getCurrentUser } from '../../services/auth';
 import { PLAN_FEATURES } from '../../constants';
 import { getUserPlan, getTrustedPersonCount, hasReachedLimit, isUnlimited, PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import { alert } from '../../components/AppAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -83,14 +84,14 @@ export default function TrustedPersonsScreen() {
 
   const handleInvite = async () => {
     if (!inviteEmail || !inviteName) {
-      Alert.alert('Error', 'Please enter both email and name');
+      alert('Error', 'Please enter both email and name');
       return;
     }
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      alert('Error', 'Please enter a valid email address');
       return;
     }
 
@@ -98,7 +99,7 @@ export default function TrustedPersonsScreen() {
     try {
       const user = await getCurrentUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        alert('Error', 'You must be logged in');
         return;
       }
 
@@ -106,7 +107,7 @@ export default function TrustedPersonsScreen() {
       const trustedCount = await getTrustedPersonCount(user.id);
       if (hasReachedLimit(trustedCount, PLAN_FEATURES[currentPlan].maxTrustedPersons)) {
         setInviting(false);
-        Alert.alert(
+        alert(
           'Trusted Person Limit Reached',
           `Your ${PLAN_LABELS[currentPlan]} plan allows up to ${PLAN_FEATURES[currentPlan].maxTrustedPersons} trusted people. Upgrade to invite more.`,
           [
@@ -126,7 +127,7 @@ export default function TrustedPersonsScreen() {
         .single();
 
       if (existing) {
-        Alert.alert('Error', 'This person has already been invited');
+        alert('Error', 'This person has already been invited');
         return;
       }
 
@@ -235,7 +236,7 @@ export default function TrustedPersonsScreen() {
         // Don't throw - invitation is saved, email is optional for MVP
       }
 
-      Alert.alert('Success', 'Invitation sent successfully!', [
+      alert('Success', 'Invitation sent successfully!', [
         {
           text: 'OK',
           onPress: () => {
@@ -248,7 +249,7 @@ export default function TrustedPersonsScreen() {
         },
       ]);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send invitation');
+      alert('Error', error.message || 'Failed to send invitation');
     } finally {
       setInviting(false);
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
@@ -8,6 +8,7 @@ import { VaultCategory } from '../../types';
 import { colors, borderRadius } from '../../constants/theme';
 import { PLAN_FEATURES } from '../../constants';
 import { getUserPlan, getVaultItemCount, hasReachedLimit, PLAN_LABELS } from '../../services/plan';
+import { alert } from '../../components/AppAlert';
 
 export default function AddVaultItemScreen() {
   const route = useRoute();
@@ -41,7 +42,7 @@ export default function AddVaultItemScreen() {
 
       if (error) throw error;
       if (!itemData) {
-        Alert.alert('Error', 'Item not found');
+        alert('Error', 'Item not found');
         navigation.goBack();
         return;
       }
@@ -55,10 +56,10 @@ export default function AddVaultItemScreen() {
         setData(parsedData);
       } catch (err) {
         console.error('Error decrypting item:', err);
-        Alert.alert('Error', 'Failed to load item data');
+        alert('Error', 'Failed to load item data');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alert('Error', error.message);
       navigation.goBack();
     } finally {
       setLoadingItem(false);
@@ -67,7 +68,7 @@ export default function AddVaultItemScreen() {
 
   const handleSave = async () => {
     if (!title) {
-      Alert.alert('Error', 'Please enter a title');
+      alert('Error', 'Please enter a title');
       return;
     }
 
@@ -75,7 +76,7 @@ export default function AddVaultItemScreen() {
     try {
       const user = await getCurrentUser();
       if (!user) {
-        Alert.alert('Error', 'You must be logged in');
+        alert('Error', 'You must be logged in');
         return;
       }
 
@@ -96,7 +97,7 @@ export default function AddVaultItemScreen() {
 
         if (error) throw error;
 
-        Alert.alert(
+        alert(
           'Success',
           'Item updated successfully',
           [
@@ -118,7 +119,7 @@ export default function AddVaultItemScreen() {
         const itemCount = await getVaultItemCount(user.id);
         if (hasReachedLimit(itemCount, PLAN_FEATURES[plan].maxItems)) {
           setLoading(false);
-          Alert.alert(
+          alert(
             'Vault Item Limit Reached',
             `Your ${PLAN_LABELS[plan]} plan allows up to ${PLAN_FEATURES[plan].maxItems} vault items. Upgrade to add more.`,
             [
@@ -142,7 +143,7 @@ export default function AddVaultItemScreen() {
 
         if (error) throw error;
 
-        Alert.alert(
+        alert(
           'Success',
           'Item added to vault',
           [
@@ -170,7 +171,7 @@ export default function AddVaultItemScreen() {
         );
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alert('Error', error.message);
     } finally {
       setLoading(false);
     }

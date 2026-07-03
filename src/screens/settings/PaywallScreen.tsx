@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, borderRadius } from '../../constants/theme';
 import { PLAN_PRICING } from '../../constants';
 import { getCurrentUser } from '../../services/auth';
 import { setUserPlan, PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
+import { alert } from '../../components/AppAlert';
 
 export default function PaywallScreen() {
   const navigation = useNavigation();
@@ -18,13 +19,13 @@ export default function PaywallScreen() {
       if (!user) return;
 
       await setUserPlan(user.id, selectedPlan as SubscriptionPlan);
-      Alert.alert(
+      alert(
         'Plan Updated',
         `You're now on the ${PLAN_LABELS[selectedPlan as SubscriptionPlan]} plan.\n\nNote: this app doesn't have real payment processing connected yet, so no charge was made.`,
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Could not update plan');
+      alert('Error', error.message || 'Could not update plan');
     } finally {
       setLoading(false);
     }

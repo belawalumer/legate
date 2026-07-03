@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,6 +19,7 @@ import {
   isRequestUnlocked,
 } from '../../services/deathVerification';
 import { generateEstateTasks } from '../../services/checklist';
+import { alert } from '../../components/AppAlert';
 
 interface VaultMembership {
   vaultOwnerId: string;
@@ -112,10 +113,10 @@ export default function DeathVerificationScreen() {
       setBusyId(membership.vaultOwnerId);
       const path = await uploadDeathCertificate(membership.vaultOwnerId, file.uri, file.name);
       await requestVaultUnlock(membership.vaultOwnerId, membership.myTrustedPersonId, path);
-      Alert.alert('Request Submitted', 'A second trusted person must confirm before the waiting period begins.');
+      alert('Request Submitted', 'A second trusted person must confirm before the waiting period begins.');
       await loadAll();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit request');
+      alert('Error', error.message || 'Failed to submit request');
     } finally {
       setBusyId(null);
     }
@@ -125,20 +126,20 @@ export default function DeathVerificationScreen() {
     try {
       setBusyId(request.id);
       await confirmVaultUnlock(request.id, membership.myTrustedPersonId);
-      Alert.alert(
+      alert(
         'Confirmed',
         `A ${DEATH_VERIFICATION_WAITING_PERIOD_HOURS}-hour waiting period has started. The vault will unlock once it ends.`
       );
       await loadAll();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to confirm request');
+      alert('Error', error.message || 'Failed to confirm request');
     } finally {
       setBusyId(null);
     }
   };
 
   const handleReject = async (request: DeathVerificationRequest) => {
-    Alert.alert('Reject Request', 'Are you sure this request should be rejected?', [
+    alert('Reject Request', 'Are you sure this request should be rejected?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Reject',
@@ -149,7 +150,7 @@ export default function DeathVerificationScreen() {
             await rejectVaultUnlockRequest(request.id);
             await loadAll();
           } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to reject request');
+            alert('Error', error.message || 'Failed to reject request');
           } finally {
             setBusyId(null);
           }

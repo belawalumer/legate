@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Switch, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,6 +15,7 @@ import {
   getNotificationsEnabled,
   setNotificationsEnabled,
 } from '../../services/appSettings';
+import { alert } from '../../components/AppAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -34,7 +35,7 @@ export default function SettingsScreen() {
     if (value) {
       const available = await isBiometricAvailable();
       if (!available) {
-        Alert.alert(
+        alert(
           'Biometrics Not Available',
           'Set up Face ID, Touch ID, or a device PIN in your phone settings to enable this.'
         );
@@ -96,7 +97,7 @@ export default function SettingsScreen() {
   };
 
   const handleSignOut = async () => {
-    Alert.alert(
+    alert(
       'Sign Out',
       'Are you sure you want to sign out?',
       [
@@ -108,7 +109,7 @@ export default function SettingsScreen() {
             try {
               await signOut();
             } catch (error: any) {
-              Alert.alert('Error', error.message);
+              alert('Error', error.message);
             }
           },
         },
@@ -244,7 +245,7 @@ export default function SettingsScreen() {
           <TouchableOpacity 
             style={styles.settingRow}
             onPress={async () => {
-              Alert.alert(
+              alert(
                 'Reset Onboarding',
                 'This will show the onboarding screen again on next app launch. Continue?',
                 [
@@ -253,7 +254,7 @@ export default function SettingsScreen() {
                     text: 'Reset',
                     onPress: async () => {
                       await AsyncStorage.removeItem('hasSeenOnboarding');
-                      Alert.alert('Success', 'Onboarding will show on next app restart');
+                      alert('Success', 'Onboarding will show on next app restart');
                     },
                   },
                 ]

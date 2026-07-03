@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { colors, borderRadius } from '../../constants/theme';
 import { getCurrentUser } from '../../services/auth';
 import { getMyTrustedPersonRecord } from '../../services/deathVerification';
 import { listEstateTasks, setTaskStatus } from '../../services/checklist';
 import { EstateTask } from '../../types';
+import { alert } from '../../components/AppAlert';
 
 type Filter = 'all' | 'pending' | 'done' | 'mine';
 
@@ -54,7 +55,7 @@ export default function ChecklistScreen() {
       await setTaskStatus(task.id, nextStatus, myTrustedPersonId);
       await load();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Could not update task');
+      alert('Error', error.message || 'Could not update task');
     } finally {
       setBusyId(null);
     }

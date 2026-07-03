@@ -5,7 +5,6 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   RefreshControl,
   ActivityIndicator,
   Linking,
@@ -20,6 +19,7 @@ import { Document } from '../../types';
 import { PLAN_FEATURES } from '../../constants';
 import { getUserPlan, PLAN_LABELS } from '../../services/plan';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import { alert } from '../../components/AppAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -76,7 +76,7 @@ export default function DocumentsScreen() {
 
       const plan = await getUserPlan(user.id);
       if (!PLAN_FEATURES[plan].documentUpload) {
-        Alert.alert(
+        alert(
           'Upgrade Required',
           `Document upload isn't available on the ${PLAN_LABELS[plan]} plan. Upgrade to store estate documents.`,
           [
@@ -95,7 +95,7 @@ export default function DocumentsScreen() {
       await uploadDocument(user.id, user.id, file.uri, file.name);
       await load();
     } catch (error: any) {
-      Alert.alert('Upload Failed', error.message || 'Could not upload document');
+      alert('Upload Failed', error.message || 'Could not upload document');
     } finally {
       setUploading(false);
     }
@@ -106,12 +106,12 @@ export default function DocumentsScreen() {
       const url = await getDocumentSignedUrl(doc.file_url);
       await Linking.openURL(url);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Could not open document');
+      alert('Error', error.message || 'Could not open document');
     }
   };
 
   const handleDelete = (doc: Document) => {
-    Alert.alert('Delete Document', `Remove "${doc.name}"? This cannot be undone.`, [
+    alert('Delete Document', `Remove "${doc.name}"? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -122,7 +122,7 @@ export default function DocumentsScreen() {
             await deleteDocument(doc.id, doc.file_url);
             await load();
           } catch (error: any) {
-            Alert.alert('Error', error.message || 'Could not delete document');
+            alert('Error', error.message || 'Could not delete document');
           } finally {
             setBusyId(null);
           }

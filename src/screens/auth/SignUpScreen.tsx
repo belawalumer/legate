@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signUpWithEmail, signInWithGoogle } from '../../services/auth';
 import { supabase } from '../../services/supabase';
 import { colors, borderRadius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
+import { alert } from '../../components/AppAlert';
 
 export default function SignUpScreen({ navigation }: any) {
   const [fullName, setFullName] = useState('');
@@ -18,17 +19,17 @@ export default function SignUpScreen({ navigation }: any) {
 
   const handleSignUp = async () => {
     if (!fullName || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      alert('Error', 'Please fill in all fields');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      alert('Error', 'Passwords do not match');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
@@ -50,18 +51,18 @@ export default function SignUpScreen({ navigation }: any) {
           hasPendingInvite = !!count && count > 0;
         }
 
-        Alert.alert(
+        alert(
           'Success',
           hasPendingInvite
             ? "Account created! Please check your email to verify your account. Once verified, you'll be connected to the vault you were invited to."
             : "Account created! Please check your email to verify your account. If you were invited as a trusted person, make sure the vault owner used this same email address."
         );
       } else {
-        Alert.alert('Success', 'Account created! Please check your email to verify your account.');
+        alert('Success', 'Account created! Please check your email to verify your account.');
       }
       navigation.navigate('Login');
     } catch (error: any) {
-      Alert.alert('Sign Up Failed', error.message);
+      alert('Sign Up Failed', error.message);
     } finally {
       setLoading(false);
     }
@@ -73,7 +74,7 @@ export default function SignUpScreen({ navigation }: any) {
       await signInWithGoogle();
       // Navigation will happen automatically via useAuth hook
     } catch (error: any) {
-      Alert.alert('Google Sign-In Failed', error.message);
+      alert('Google Sign-In Failed', error.message);
     } finally {
       setGoogleLoading(false);
     }

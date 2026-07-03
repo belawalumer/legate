@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../services/supabase';
@@ -7,6 +7,7 @@ import { getCurrentUser } from '../../services/auth';
 import { decryptData } from '../../services/encryption';
 import { VAULT_CATEGORIES } from '../../constants';
 import { colors, borderRadius } from '../../constants/theme';
+import { alert } from '../../components/AppAlert';
 
 export default function VaultItemDetailScreen() {
   const route = useRoute();
@@ -29,7 +30,7 @@ export default function VaultItemDetailScreen() {
       if (!ownerId) {
         const user = await getCurrentUser();
         if (!user) {
-          Alert.alert('Error', 'You must be logged in');
+          alert('Error', 'You must be logged in');
           return;
         }
         ownerId = user.id;
@@ -44,7 +45,7 @@ export default function VaultItemDetailScreen() {
 
       if (error) throw error;
       if (!data) {
-        Alert.alert('Error', 'Item not found');
+        alert('Error', 'Item not found');
         return;
       }
 
@@ -59,7 +60,7 @@ export default function VaultItemDetailScreen() {
         setDecryptedData({});
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alert('Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function VaultItemDetailScreen() {
   const categoryInfo = VAULT_CATEGORIES.find(cat => cat.value === item?.category);
 
   const handleDelete = () => {
-    Alert.alert(
+    alert(
       'Delete Item',
       'Are you sure you want to delete this item? This action cannot be undone.',
       [
@@ -84,7 +85,7 @@ export default function VaultItemDetailScreen() {
             try {
               const user = await getCurrentUser();
               if (!user) {
-                Alert.alert('Error', 'You must be logged in');
+                alert('Error', 'You must be logged in');
                 return;
               }
 
@@ -96,14 +97,14 @@ export default function VaultItemDetailScreen() {
 
               if (error) throw error;
 
-              Alert.alert('Success', 'Item deleted successfully', [
+              alert('Success', 'Item deleted successfully', [
                 {
                   text: 'OK',
                   onPress: () => navigation.goBack(),
                 },
               ]);
             } catch (error: any) {
-              Alert.alert('Error', error.message);
+              alert('Error', error.message);
             } finally {
               setDeleting(false);
             }

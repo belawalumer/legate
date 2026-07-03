@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { VAULT_CATEGORIES } from '../../constants';
 import { VaultCategory } from '../../types';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
 import { colors, borderRadius } from '../../constants/theme';
+import { alert } from '../../components/AppAlert';
 
 export default function VaultScreen() {
   const navigation = useNavigation();
@@ -49,7 +50,7 @@ export default function VaultScreen() {
       if (error) throw error;
       setItems(data || []);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alert('Error', error.message);
     } finally {
       setLoading(false);
     }

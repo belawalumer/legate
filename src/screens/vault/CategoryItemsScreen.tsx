@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
@@ -8,6 +8,7 @@ import { decryptData } from '../../services/encryption';
 import { VaultCategory } from '../../types';
 import { VAULT_CATEGORIES } from '../../constants';
 import { colors, borderRadius } from '../../constants/theme';
+import { alert } from '../../components/AppAlert';
 
 export default function CategoryItemsScreen() {
   const route = useRoute();
@@ -75,7 +76,7 @@ export default function CategoryItemsScreen() {
       
       setItems(decryptedItems);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alert('Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -528,7 +529,7 @@ export default function CategoryItemsScreen() {
     };
     
     const handleDelete = () => {
-      Alert.alert(
+      alert(
         'Delete Item',
         'Are you sure you want to delete this item? This action cannot be undone.',
         [
@@ -555,7 +556,7 @@ export default function CategoryItemsScreen() {
                 // Reload items
                 loadItems();
               } catch (error: any) {
-                Alert.alert('Error', error.message);
+                alert('Error', error.message);
               }
             },
           },

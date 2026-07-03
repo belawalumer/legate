@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, borderRadius } from '../../constants/theme';
@@ -9,6 +9,7 @@ import { getVaultTrustedPersons, getVaultUnlockRequests, isRequestUnlocked } fro
 import { listEstateTasks } from '../../services/checklist';
 import { getSubscriptions, calculateMonthlySavings } from '../../services/subscriptions';
 import { EstateTask, TrustedPerson } from '../../types';
+import { alert } from '../../components/AppAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -69,7 +70,7 @@ export default function HeirWorkspaceScreen() {
   const urgentTasks = tasks.filter((t) => t.priority === 'high' && t.status !== 'completed');
 
   const comingSoon = (feature: string) =>
-    Alert.alert('Coming Soon', `${feature} will be available in a future update.`);
+    alert('Coming Soon', `${feature} will be available in a future update.`);
 
   if (loading) {
     return (

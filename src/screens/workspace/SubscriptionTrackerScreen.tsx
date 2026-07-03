@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { colors, borderRadius } from '../../constants/theme';
 import { getCurrentUser } from '../../services/auth';
@@ -9,6 +9,7 @@ import {
   calculateMonthlySavings,
   setSubscriptionCancelled,
 } from '../../services/subscriptions';
+import { alert } from '../../components/AppAlert';
 
 export default function SubscriptionTrackerScreen() {
   const route = useRoute();
@@ -47,7 +48,7 @@ export default function SubscriptionTrackerScreen() {
       await setSubscriptionCancelled(sub.id, !sub.isCancelled);
       await load();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Could not update subscription');
+      alert('Error', error.message || 'Could not update subscription');
     } finally {
       setBusyId(null);
     }

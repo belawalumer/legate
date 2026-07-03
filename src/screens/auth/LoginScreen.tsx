@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { signInWithEmail, signInWithMagicLink, signInWithGoogle } from '../../services/auth';
 import { colors, borderRadius } from '../../constants/theme';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
+import { alert } from '../../components/AppAlert';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -12,7 +13,7 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      alert('Error', 'Please enter both email and password');
       return;
     }
 
@@ -21,7 +22,7 @@ export default function LoginScreen({ navigation }: any) {
       await signInWithEmail(email, password);
       // Navigation will happen automatically via useAuth hook
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      alert('Login Failed', error.message);
     } finally {
       setLoading(false);
     }
@@ -33,7 +34,7 @@ export default function LoginScreen({ navigation }: any) {
       await signInWithGoogle();
       // Navigation will happen automatically via useAuth hook
     } catch (error: any) {
-      Alert.alert('Google Sign-In Failed', error.message);
+      alert('Google Sign-In Failed', error.message);
     } finally {
       setGoogleLoading(false);
     }
@@ -41,16 +42,16 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleMagicLink = async () => {
     if (!email) {
-      Alert.alert('Error', 'Please enter your email');
+      alert('Error', 'Please enter your email');
       return;
     }
 
     setLoading(true);
     try {
       await signInWithMagicLink(email);
-      Alert.alert('Check Your Email', 'We sent you a magic link to sign in.');
+      alert('Check Your Email', 'We sent you a magic link to sign in.');
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alert('Error', error.message);
     } finally {
       setLoading(false);
     }
