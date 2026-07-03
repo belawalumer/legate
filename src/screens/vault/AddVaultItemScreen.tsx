@@ -6,6 +6,8 @@ import { getCurrentUser } from '../../services/auth';
 import { encryptData, decryptData } from '../../services/encryption';
 import { VaultCategory } from '../../types';
 import { colors, borderRadius } from '../../constants/theme';
+import { PLAN_FEATURES } from '../../constants';
+import { getUserPlan, getVaultItemCount, hasReachedLimit, PLAN_LABELS } from '../../services/plan';
 
 export default function AddVaultItemScreen() {
   const route = useRoute();
@@ -112,6 +114,21 @@ export default function AddVaultItemScreen() {
           ]
         );
       } else {
+        const plan = await getUserPlan(user.id);
+        const itemCount = await getVaultItemCount(user.id);
+        if (hasReachedLimit(itemCount, PLAN_FEATURES[plan].maxItems)) {
+          setLoading(false);
+          Alert.alert(
+            'Vault Item Limit Reached',
+            `Your ${PLAN_LABELS[plan]} plan allows up to ${PLAN_FEATURES[plan].maxItems} vault items. Upgrade to add more.`,
+            [
+              { text: 'Not Now', style: 'cancel' },
+              { text: 'Upgrade', onPress: () => (navigation as any).navigate('Paywall') },
+            ]
+          );
+          return;
+        }
+
         // Insert new item
         const { error } = await supabase
           .from('vault_items')
@@ -477,6 +494,15 @@ export default function AddVaultItemScreen() {
               placeholder="e.g., 15th of each month"
             />
           </View>
+          <TouchableOpacity
+            style={styles.checkboxRow}
+            onPress={() => setData({ ...data, is_cancelled: data.is_cancelled === 'true' ? '' : 'true' })}
+          >
+            <View style={[styles.checkbox, data.is_cancelled === 'true' && styles.checkboxChecked]}>
+              {data.is_cancelled === 'true' && <Text style={styles.checkboxMark}>✓</Text>}
+            </View>
+            <Text style={styles.checkboxLabel}>This subscription has been cancelled</Text>
+          </TouchableOpacity>
         </>
       )}
 
@@ -778,6 +804,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  checkboxMark: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  checkboxLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   header: {
     backgroundColor: colors.navy,

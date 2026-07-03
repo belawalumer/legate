@@ -56,4 +56,10 @@ export const PLAN_FEATURES = {
   },
 };
 
+export const PLAN_PRICING: { plan: 'essential' | 'family' | 'legacy'; priceUsdPerYear: number; tagline: string; featured?: boolean }[] = [
+  { plan: 'essential', priceUsdPerYear: 29, tagline: 'Unlimited items · 3 trusted people' },
+  { plan: 'family', priceUsdPerYear: 79, tagline: '5 trusted people · priority unlock', featured: true },
+  { plan: 'legacy', priceUsdPerYear: 149, tagline: 'Everything · AI tagging · support' },
+];
+
 export const DEATH_VERIFICATION_WAITING_PERIOD_HOURS = 72;

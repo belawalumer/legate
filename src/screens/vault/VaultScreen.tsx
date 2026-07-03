@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { VAULT_CATEGORIES } from '../../constants';
 import { VaultCategory } from '../../types';
 import { supabase } from '../../services/supabase';
@@ -9,6 +9,9 @@ import { colors, borderRadius } from '../../constants/theme';
 
 export default function VaultScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const params = route.params as { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
+  const isViewingOtherVault = !!params?.vaultOwnerId;
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [healthScore, setHealthScore] = useState(0);
@@ -26,15 +29,21 @@ export default function VaultScreen() {
     return unsubscribe;
   }, [navigation]);
 
+  const resolveVaultOwnerId = async () => {
+    if (params?.vaultOwnerId) return params.vaultOwnerId;
+    const user = await getCurrentUser();
+    return user?.id || null;
+  };
+
   const loadVaultItems = async () => {
     try {
-      const user = await getCurrentUser();
-      if (!user) return;
+      const vaultOwnerId = await resolveVaultOwnerId();
+      if (!vaultOwnerId) return;
 
       const { data, error } = await supabase
         .from('vault_items')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', vaultOwnerId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -48,13 +57,13 @@ export default function VaultScreen() {
 
   const calculateHealthScore = async () => {
     try {
-      const user = await getCurrentUser();
-      if (!user) return;
+      const vaultOwnerId = await resolveVaultOwnerId();
+      if (!vaultOwnerId) return;
 
       const { data } = await supabase
         .from('vault_items')
         .select('category')
-        .eq('user_id', user.id);
+        .eq('user_id', vaultOwnerId);
 
       const categories = new Set(data?.map(item => item.category) || []);
       const score = Math.round((categories.size / VAULT_CATEGORIES.length) * 100);
@@ -72,6 +81,17 @@ export default function VaultScreen() {
     const count = getCategoryCount(item.value);
     const hasItems = count > 0;
     const handlePress = () => {
+      if (isViewingOtherVault) {
+        // Read-only: only browse existing items, never add new ones to someone else's vault
+        if (count > 0) {
+          (navigation as any).navigate('CategoryItems', {
+            category: item.value,
+            vaultOwnerId: params!.vaultOwnerId,
+            vaultOwnerName: params!.vaultOwnerName,
+          });
+        }
+        return;
+      }
       if (count > 0) {
         // If category has items, show the items list
         (navigation as any).navigate('CategoryItems', { category: item.value });
@@ -101,8 +121,12 @@ export default function VaultScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Your Vault</Text>
-        <Text style={styles.headerSubtitle}>Tap any category to add or view items</Text>
+        <Text style={styles.headerTitle}>
+          {isViewingOtherVault ? `${params!.vaultOwnerName || 'Owner'}'s Vault` : 'Your Vault'}
+        </Text>
+        <Text style={styles.headerSubtitle}>
+          {isViewingOtherVault ? 'Read-only access' : 'Tap any category to add or view items'}
+        </Text>
       </View>
       <FlatList
         data={VAULT_CATEGORIES}

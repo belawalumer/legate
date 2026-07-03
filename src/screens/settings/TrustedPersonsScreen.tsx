@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
+import { PLAN_FEATURES } from '../../constants';
+import { getUserPlan, getTrustedPersonCount, hasReachedLimit, isUnlimited, PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const RELATIONSHIP_OPTIONS = [
   { value: 'spouse', label: 'Spouse' },
@@ -12,6 +19,11 @@ const RELATIONSHIP_OPTIONS = [
 ];
 
 export default function TrustedPersonsScreen() {
+  const route = useRoute();
+  const navigation = useNavigation<NavigationProp>();
+  const params = route.params as { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
+  const isViewingOtherVault = !!params?.vaultOwnerId;
+
   const [trustedPersons, setTrustedPersons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -20,6 +32,7 @@ export default function TrustedPersonsScreen() {
   const [inviteRelationship, setInviteRelationship] = useState('other');
   const [showRelationshipPicker, setShowRelationshipPicker] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const [plan, setPlan] = useState<SubscriptionPlan>('free');
 
   useEffect(() => {
     loadTrustedPersons();
@@ -27,13 +40,18 @@ export default function TrustedPersonsScreen() {
 
   const loadTrustedPersons = async () => {
     try {
-      const user = await getCurrentUser();
-      if (!user) return;
+      let ownerId = params?.vaultOwnerId;
+      if (!ownerId) {
+        const user = await getCurrentUser();
+        if (!user) return;
+        ownerId = user.id;
+        setPlan(await getUserPlan(user.id));
+      }
 
       const { data, error } = await supabase
         .from('trusted_persons')
         .select('*')
-        .eq('vault_owner_id', user.id)
+        .eq('vault_owner_id', ownerId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -81,6 +99,21 @@ export default function TrustedPersonsScreen() {
       const user = await getCurrentUser();
       if (!user) {
         Alert.alert('Error', 'You must be logged in');
+        return;
+      }
+
+      const currentPlan = await getUserPlan(user.id);
+      const trustedCount = await getTrustedPersonCount(user.id);
+      if (hasReachedLimit(trustedCount, PLAN_FEATURES[currentPlan].maxTrustedPersons)) {
+        setInviting(false);
+        Alert.alert(
+          'Trusted Person Limit Reached',
+          `Your ${PLAN_LABELS[currentPlan]} plan allows up to ${PLAN_FEATURES[currentPlan].maxTrustedPersons} trusted people. Upgrade to invite more.`,
+          [
+            { text: 'Not Now', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => navigation.navigate('Paywall') },
+          ]
+        );
         return;
       }
 
@@ -224,17 +257,23 @@ export default function TrustedPersonsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Trusted People</Text>
+        <Text style={styles.headerTitle}>
+          {isViewingOtherVault ? `${params!.vaultOwnerName || 'Vault'}'s Trusted People` : 'Trusted People'}
+        </Text>
         <Text style={styles.headerSubtitle}>
-          These people can request access to your vault when the time comes
+          {isViewingOtherVault
+            ? 'The people trusted with this vault'
+            : 'These people can request access to your vault when the time comes'}
         </Text>
       </View>
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-        <View style={styles.infoBanner}>
-          <Text style={styles.infoBannerText}>
-            <Text style={styles.infoBannerStrong}>Two-key protection:</Text> Two trusted people must confirm the request before your vault unlocks. This prevents unauthorized access.
-          </Text>
-        </View>
+        {!isViewingOtherVault && (
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoBannerText}>
+              <Text style={styles.infoBannerStrong}>Two-key protection:</Text> Two trusted people must confirm the request before your vault unlocks. This prevents unauthorized access.
+            </Text>
+          </View>
+        )}
 
         {trustedPersons.map((person) => {
           const badge = getStatusBadge(person.status || 'pending');
@@ -261,21 +300,33 @@ export default function TrustedPersonsScreen() {
           );
         })}
 
-        <TouchableOpacity 
-          style={styles.addPersonBtn}
-          onPress={() => setShowInviteModal(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.addPersonIcon}>+</Text>
-          <Text style={styles.addPersonText}>Invite another trusted person</Text>
-        </TouchableOpacity>
+        {!isViewingOtherVault && (
+          <>
+            <TouchableOpacity
+              style={styles.addPersonBtn}
+              onPress={() => setShowInviteModal(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.addPersonIcon}>+</Text>
+              <Text style={styles.addPersonText}>Invite another trusted person</Text>
+            </TouchableOpacity>
 
-        <View style={styles.upgradeBanner}>
-          <Text style={styles.upgradeText}>
-            ✦ Essential plan · 1 more person available.{' '}
-            <Text style={styles.upgradeLink}>Upgrade to Family</Text> for up to 5 trusted people.
-          </Text>
-        </View>
+            {!isUnlimited(PLAN_FEATURES[plan].maxTrustedPersons) && (
+              <TouchableOpacity
+                style={styles.upgradeBanner}
+                onPress={() => navigation.navigate('Paywall')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.upgradeText}>
+                  ✦ {PLAN_LABELS[plan]} plan ·{' '}
+                  {Math.max(PLAN_FEATURES[plan].maxTrustedPersons - trustedPersons.length, 0)} more{' '}
+                  {PLAN_FEATURES[plan].maxTrustedPersons - trustedPersons.length === 1 ? 'person' : 'people'} available.{' '}
+                  <Text style={styles.upgradeLink}>Upgrade</Text> for more.
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* Invite Modal */}

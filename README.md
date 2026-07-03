@@ -78,3 +78,14 @@ supabase secrets set RESEND_API_KEY=your_resend_api_key
 ```
 
 Without `RESEND_API_KEY` configured, trusted person invitations are still saved to the database, but no email is sent.
+
+### 6. (Optional) Enable Google sign-in
+
+Google login uses Supabase's OAuth provider, so it needs to be configured in your Supabase project (not just in code):
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth 2.0 Client ID (type: Web application).
+2. In the Supabase dashboard, go to **Authentication → Providers → Google**, enable it, and paste in the Client ID and Client Secret from step 1.
+3. In the same Google Cloud OAuth client, add Supabase's callback URL as an authorized redirect URI: `https://<your-project-ref>.supabase.co/auth/v1/callback`.
+4. In **Authentication → URL Configuration** in Supabase, add `legate://auth/callback` to the list of allowed redirect URLs (this is the app's own deep link, defined by the `scheme` in `app.json`).
+
+Without this configuration, the "Continue with Google" buttons will fail with an error from Supabase rather than opening the Google login prompt.

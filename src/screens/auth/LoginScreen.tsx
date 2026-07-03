@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { signInWithEmail, signInWithMagicLink } from '../../services/auth';
+import { signInWithEmail, signInWithMagicLink, signInWithGoogle } from '../../services/auth';
 import { colors, borderRadius } from '../../constants/theme';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
@@ -22,6 +23,18 @@ export default function LoginScreen({ navigation }: any) {
       Alert.alert('Login Failed', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      // Navigation will happen automatically via useAuth hook
+    } catch (error: any) {
+      Alert.alert('Google Sign-In Failed', error.message);
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -82,6 +95,20 @@ export default function LoginScreen({ navigation }: any) {
         <Text style={styles.buttonText}>Send Magic Link</Text>
       </TouchableOpacity>
 
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>OR</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.button, styles.googleButton]}
+        onPress={handleGoogleLogin}
+        disabled={googleLoading}
+      >
+        <Text style={styles.googleButtonText}>Continue with Google</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         onPress={() => (navigation as any).navigate('SignUp')}
         style={styles.linkButton}
@@ -140,6 +167,33 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: colors.cream,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 11,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+  },
+  googleButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  googleButtonText: {
+    color: colors.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.5,

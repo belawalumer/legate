@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { signUpWithEmail } from '../../services/auth';
+import { signUpWithEmail, signInWithGoogle } from '../../services/auth';
+import { supabase } from '../../services/supabase';
 import { colors, borderRadius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -11,6 +12,7 @@ export default function SignUpScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [userType, setUserType] = useState<'owner' | 'trusted'>('owner');
 
   const handleSignUp = async () => {
@@ -32,12 +34,47 @@ export default function SignUpScreen({ navigation }: any) {
     setLoading(true);
     try {
       await signUpWithEmail(email, password, fullName);
-      Alert.alert('Success', 'Account created! Please check your email to verify your account.');
+
+      if (userType === 'trusted') {
+        // If email confirmation is disabled, signUpWithEmail already leaves us
+        // authenticated, so we can check for a matching invite right away.
+        let hasPendingInvite = false;
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          const { count } = await supabase
+            .from('trusted_persons')
+            .select('id', { count: 'exact', head: true })
+            .eq('email', email)
+            .eq('status', 'pending');
+          hasPendingInvite = !!count && count > 0;
+        }
+
+        Alert.alert(
+          'Success',
+          hasPendingInvite
+            ? "Account created! Please check your email to verify your account. Once verified, you'll be connected to the vault you were invited to."
+            : "Account created! Please check your email to verify your account. If you were invited as a trusted person, make sure the vault owner used this same email address."
+        );
+      } else {
+        Alert.alert('Success', 'Account created! Please check your email to verify your account.');
+      }
       navigation.navigate('Login');
     } catch (error: any) {
       Alert.alert('Sign Up Failed', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      // Navigation will happen automatically via useAuth hook
+    } catch (error: any) {
+      Alert.alert('Google Sign-In Failed', error.message);
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -138,9 +175,23 @@ export default function SignUpScreen({ navigation }: any) {
           disabled={loading}
         >
           <View style={styles.buttonContent}>
-            <Text style={styles.buttonText}>Create My Vault</Text>
+            <Text style={styles.buttonText}>{userType === 'owner' ? 'Create My Vault' : 'Create My Account'}</Text>
             <Ionicons name="arrow-forward" size={20} color={colors.navy} style={styles.buttonArrow} />
           </View>
+        </TouchableOpacity>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, styles.googleButton]}
+          onPress={handleGoogleSignUp}
+          disabled={googleLoading}
+        >
+          <Text style={styles.googleButtonText}>Continue with Google</Text>
         </TouchableOpacity>
 
       <TouchableOpacity
@@ -241,6 +292,35 @@ const styles = StyleSheet.create({
   },
   buttonArrow: {
     marginLeft: 4,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 1,
+  },
+  googleButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    marginTop: 0,
+  },
+  googleButtonText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   linkButton: {
     marginTop: 12,

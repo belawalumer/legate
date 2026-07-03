@@ -33,17 +33,20 @@ CREATE TABLE IF NOT EXISTS trusted_persons (
 );
 
 -- Death Verifications Table
+-- Status lifecycle: awaiting_confirmation -> confirmed (waiting period running) -> approved (unlocked)
+--                                          \-> rejected (owner or the requester cancelled it)
 CREATE TABLE IF NOT EXISTS death_verifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vault_owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   requested_by UUID NOT NULL REFERENCES trusted_persons(id) ON DELETE CASCADE,
   death_certificate_url TEXT,
   secondary_confirmation_by UUID REFERENCES trusted_persons(id),
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  status TEXT NOT NULL DEFAULT 'awaiting_confirmation' CHECK (status IN ('awaiting_confirmation', 'confirmed', 'approved', 'rejected')),
   waiting_period_ends_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   reviewed_at TIMESTAMP WITH TIME ZONE,
-  reviewed_by UUID REFERENCES auth.users(id)
+  reviewed_by UUID REFERENCES auth.users(id),
+  CONSTRAINT secondary_confirmation_differs_from_requester CHECK (secondary_confirmation_by IS DISTINCT FROM requested_by)
 );
 
 -- Estate Tasks Table (Auto-generated checklist)
@@ -100,6 +103,22 @@ RETURNS TEXT AS $$
   );
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
+-- A vault is considered unlocked only once a death verification has been
+-- confirmed by a second trusted person AND the waiting period has elapsed.
+-- Checked at read-time (not just when writing "approved") so access is
+-- correct even if a scheduled job hasn't yet flipped the status column.
+CREATE OR REPLACE FUNCTION public.is_vault_unlocked_for(owner_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM death_verifications dv
+    WHERE dv.vault_owner_id = owner_id
+    AND dv.status IN ('confirmed', 'approved')
+    AND dv.secondary_confirmation_by IS NOT NULL
+    AND dv.waiting_period_ends_at IS NOT NULL
+    AND dv.waiting_period_ends_at <= NOW()
+  );
+$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+
 -- Row Level Security (RLS) Policies
 
 -- Enable RLS on all tables
@@ -116,9 +135,11 @@ DROP POLICY IF EXISTS "Users can insert their own vault items" ON vault_items;
 DROP POLICY IF EXISTS "Users can update their own vault items" ON vault_items;
 DROP POLICY IF EXISTS "Users can delete their own vault items" ON vault_items;
 DROP POLICY IF EXISTS "Trusted persons can view vault after death verification" ON vault_items;
+DROP POLICY IF EXISTS "Trusted persons can update subscriptions after unlock" ON vault_items;
 DROP POLICY IF EXISTS "Users can view their trusted persons" ON trusted_persons;
 DROP POLICY IF EXISTS "Users can manage their trusted persons" ON trusted_persons;
 DROP POLICY IF EXISTS "Trusted persons can view their own records" ON trusted_persons;
+DROP POLICY IF EXISTS "Trusted persons can accept their own invitation" ON trusted_persons;
 DROP POLICY IF EXISTS "Trusted persons can create death verification requests" ON death_verifications;
 DROP POLICY IF EXISTS "Trusted persons can view their verification requests" ON death_verifications;
 DROP POLICY IF EXISTS "Users can view their estate tasks" ON estate_tasks;
@@ -128,6 +149,7 @@ DROP POLICY IF EXISTS "Trusted persons can view documents after verification" ON
 DROP POLICY IF EXISTS "Users can view their own profile" ON user_profiles;
 DROP POLICY IF EXISTS "Users can insert their own profile" ON user_profiles;
 DROP POLICY IF EXISTS "Users can update their own profile" ON user_profiles;
+DROP POLICY IF EXISTS "Trusted persons can view their vault owner's profile" ON user_profiles;
 
 -- Vault Items Policies
 -- Owners can manage their own vault items
@@ -147,18 +169,37 @@ CREATE POLICY "Users can delete their own vault items"
   ON vault_items FOR DELETE
   USING (auth.uid() = user_id);
 
--- Trusted persons can view vault items after death verification is approved
+-- Any accepted trusted person can view vault items once the vault has been unlocked
 CREATE POLICY "Trusted persons can view vault after death verification"
   ON vault_items FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM death_verifications dv
-      JOIN trusted_persons tp ON tp.id = dv.requested_by
-      WHERE dv.vault_owner_id = vault_items.user_id
-      AND dv.status = 'approved'
+    public.is_vault_unlocked_for(vault_items.user_id)
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = vault_items.user_id
+      AND tp.status = 'accepted'
       AND tp.email = public.get_user_email()
     )
   );
+
+-- Any accepted trusted person can mark a subscription cancelled once the vault
+-- is unlocked. They already have full read access to the plaintext at this
+-- point, so allowing them to rewrite encrypted_data (subscriptions only) is not
+-- a new exposure - see trusted_person_subscription_update_guard for the
+-- column-level guard on everything else.
+CREATE POLICY "Trusted persons can update subscriptions after unlock"
+  ON vault_items FOR UPDATE
+  USING (
+    category = 'subscriptions'
+    AND public.is_vault_unlocked_for(vault_items.user_id)
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = vault_items.user_id
+      AND tp.status = 'accepted'
+      AND tp.email = public.get_user_email()
+    )
+  )
+  WITH CHECK (auth.uid() IS DISTINCT FROM user_id);
 
 -- Trusted Persons Policies
 CREATE POLICY "Users can view their trusted persons"
@@ -174,6 +215,13 @@ CREATE POLICY "Trusted persons can view their own records"
   ON trusted_persons FOR SELECT
   USING (email = public.get_user_email());
 
+-- Trusted persons can accept their own pending invitation (status only; see
+-- enforce_trusted_person_self_update trigger below for the column-level guard)
+CREATE POLICY "Trusted persons can accept their own invitation"
+  ON trusted_persons FOR UPDATE
+  USING (email = public.get_user_email() AND status = 'pending')
+  WITH CHECK (email = public.get_user_email());
+
 -- Death Verifications Policies
 CREATE POLICY "Trusted persons can create death verification requests"
   ON death_verifications FOR INSERT
@@ -181,33 +229,59 @@ CREATE POLICY "Trusted persons can create death verification requests"
     EXISTS (
       SELECT 1 FROM trusted_persons tp
       WHERE tp.id = requested_by
+      AND tp.status = 'accepted'
       AND tp.email = public.get_user_email()
     )
   );
 
-CREATE POLICY "Trusted persons can view their verification requests"
+-- The owner and any of their accepted trusted persons can see verification requests
+CREATE POLICY "Owner and trusted persons can view verification requests"
   ON death_verifications FOR SELECT
   USING (
-    requested_by IN (
-      SELECT id FROM trusted_persons
-      WHERE email = public.get_user_email()
+    auth.uid() = vault_owner_id
+    OR EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = death_verifications.vault_owner_id
+      AND tp.status = 'accepted'
+      AND tp.email = public.get_user_email()
     )
   );
+
+-- A different accepted trusted person can add the second confirmation while it's awaiting one
+CREATE POLICY "Trusted persons can confirm a pending verification request"
+  ON death_verifications FOR UPDATE
+  USING (
+    status = 'awaiting_confirmation'
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = death_verifications.vault_owner_id
+      AND tp.status = 'accepted'
+      AND tp.email = public.get_user_email()
+      AND tp.id <> death_verifications.requested_by
+    )
+  )
+  WITH CHECK (auth.uid() IS DISTINCT FROM vault_owner_id);
+
+-- The owner can reject/cancel a verification request on their own vault
+CREATE POLICY "Owner can reject a verification request"
+  ON death_verifications FOR UPDATE
+  USING (auth.uid() = vault_owner_id)
+  WITH CHECK (auth.uid() = vault_owner_id);
 
 -- Estate Tasks Policies
 CREATE POLICY "Users can view their estate tasks"
   ON estate_tasks FOR SELECT
   USING (auth.uid() = vault_owner_id);
 
--- Trusted persons can view and update estate tasks after death verification
+-- Any accepted trusted person can view and update estate tasks once the vault is unlocked
 CREATE POLICY "Trusted persons can manage estate tasks after verification"
   ON estate_tasks FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM death_verifications dv
-      JOIN trusted_persons tp ON tp.id = dv.requested_by
-      WHERE dv.vault_owner_id = estate_tasks.vault_owner_id
-      AND dv.status = 'approved'
+    public.is_vault_unlocked_for(estate_tasks.vault_owner_id)
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = estate_tasks.vault_owner_id
+      AND tp.status = 'accepted'
       AND tp.email = public.get_user_email()
     )
   );
@@ -217,15 +291,15 @@ CREATE POLICY "Users can manage their documents"
   ON documents FOR ALL
   USING (auth.uid() = vault_owner_id);
 
--- Trusted persons can view documents after death verification
+-- Any accepted trusted person can view documents once the vault is unlocked
 CREATE POLICY "Trusted persons can view documents after verification"
   ON documents FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM death_verifications dv
-      JOIN trusted_persons tp ON tp.id = dv.requested_by
-      WHERE dv.vault_owner_id = documents.vault_owner_id
-      AND dv.status = 'approved'
+    public.is_vault_unlocked_for(documents.vault_owner_id)
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = documents.vault_owner_id
+      AND tp.status = 'accepted'
       AND tp.email = public.get_user_email()
     )
   );
@@ -234,6 +308,18 @@ CREATE POLICY "Trusted persons can view documents after verification"
 CREATE POLICY "Users can view their own profile"
   ON user_profiles FOR SELECT
   USING (auth.uid() = id);
+
+-- Accepted trusted persons can see the display name of a vault owner who trusted them
+CREATE POLICY "Trusted persons can view their vault owner's profile"
+  ON user_profiles FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id = user_profiles.id
+      AND tp.status = 'accepted'
+      AND tp.email = public.get_user_email()
+    )
+  );
 
 CREATE POLICY "Users can insert their own profile"
   ON user_profiles FOR INSERT
@@ -265,6 +351,102 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
 
+-- Restrict updates made by the invited trusted person (not the vault owner) to
+-- flipping status from 'pending' to 'accepted' only - no other column may change.
+CREATE OR REPLACE FUNCTION public.enforce_trusted_person_self_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.uid() IS DISTINCT FROM NEW.vault_owner_id THEN
+    IF OLD.status <> 'pending' OR NEW.status <> 'accepted' THEN
+      RAISE EXCEPTION 'Trusted persons may only accept a pending invitation';
+    END IF;
+    IF NEW.vault_owner_id <> OLD.vault_owner_id
+      OR NEW.email <> OLD.email
+      OR NEW.full_name <> OLD.full_name
+      OR NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Trusted persons may only update their invitation status';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trusted_person_self_update_guard ON trusted_persons;
+CREATE TRIGGER trusted_person_self_update_guard
+  BEFORE UPDATE ON trusted_persons
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_trusted_person_self_update();
+
+-- Restrict updates made by a trusted person (not the vault owner) on a death
+-- verification request to supplying the second confirmation only: they may set
+-- secondary_confirmation_by (to their own trusted_persons id, distinct from the
+-- requester), flip status from awaiting_confirmation to confirmed, and start the
+-- waiting period. No other column, and no other transition, may be changed by them.
+CREATE OR REPLACE FUNCTION public.enforce_death_verification_confirmation_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.uid() IS DISTINCT FROM NEW.vault_owner_id THEN
+    IF OLD.status <> 'awaiting_confirmation' OR NEW.status <> 'confirmed' THEN
+      RAISE EXCEPTION 'Trusted persons may only move a request from awaiting_confirmation to confirmed';
+    END IF;
+    IF NEW.vault_owner_id <> OLD.vault_owner_id
+      OR NEW.requested_by <> OLD.requested_by
+      OR NEW.death_certificate_url IS DISTINCT FROM OLD.death_certificate_url THEN
+      RAISE EXCEPTION 'Trusted persons may only supply the second confirmation';
+    END IF;
+    IF NEW.secondary_confirmation_by IS NULL
+      OR NEW.secondary_confirmation_by = NEW.requested_by
+      OR NOT EXISTS (
+        SELECT 1 FROM trusted_persons tp
+        WHERE tp.id = NEW.secondary_confirmation_by
+        AND tp.vault_owner_id = NEW.vault_owner_id
+        AND tp.status = 'accepted'
+        AND tp.email = public.get_user_email()
+      ) THEN
+      RAISE EXCEPTION 'secondary_confirmation_by must be the confirming trusted person, distinct from the requester';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS death_verification_confirmation_guard ON death_verifications;
+CREATE TRIGGER death_verification_confirmation_guard
+  BEFORE UPDATE ON death_verifications
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_death_verification_confirmation_update();
+
+-- Restrict updates made by a trusted person (not the owner) on a vault item to
+-- rewriting encrypted_data on subscription items only. Postgres cannot inspect
+-- the ciphertext to confirm only is_cancelled changed inside it, but the
+-- trusted person already has full plaintext read access post-unlock (that's
+-- what granted them this UPDATE in the first place), so this is not a new
+-- exposure - it's just letting them use the app's own edit flow instead of
+-- lower-level table access.
+CREATE OR REPLACE FUNCTION public.enforce_trusted_person_vault_item_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.uid() IS DISTINCT FROM NEW.user_id THEN
+    IF OLD.category <> 'subscriptions' OR NEW.category <> 'subscriptions' THEN
+      RAISE EXCEPTION 'Trusted persons may only update subscription items';
+    END IF;
+    IF NEW.user_id <> OLD.user_id
+      OR NEW.category <> OLD.category
+      OR NEW.title <> OLD.title
+      OR NEW.metadata IS DISTINCT FROM OLD.metadata THEN
+      RAISE EXCEPTION 'Trusted persons may only update the encrypted_data field';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trusted_person_vault_item_update_guard ON vault_items;
+CREATE TRIGGER trusted_person_vault_item_update_guard
+  BEFORE UPDATE ON vault_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_trusted_person_vault_item_update();
+
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -284,3 +466,70 @@ CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON user_profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- Death Certificate Storage
+-- Private bucket: death certificates are only readable by the vault owner and
+-- their accepted trusted persons, uploaded by a trusted person under a path
+-- prefixed with the vault owner's user id, e.g. "<vault_owner_id>/<file>".
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('death-certificates', 'death-certificates', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Trusted persons can upload death certificates" ON storage.objects;
+DROP POLICY IF EXISTS "Owner and trusted persons can view death certificates" ON storage.objects;
+
+CREATE POLICY "Trusted persons can upload death certificates"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'death-certificates'
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id::TEXT = (storage.foldername(name))[1]
+      AND tp.status = 'accepted'
+      AND tp.email = public.get_user_email()
+    )
+  );
+
+CREATE POLICY "Owner and trusted persons can view death certificates"
+  ON storage.objects FOR SELECT
+  USING (
+    bucket_id = 'death-certificates'
+    AND (
+      auth.uid()::TEXT = (storage.foldername(name))[1]
+      OR EXISTS (
+        SELECT 1 FROM trusted_persons tp
+        WHERE tp.vault_owner_id::TEXT = (storage.foldername(name))[1]
+        AND tp.status = 'accepted'
+        AND tp.email = public.get_user_email()
+      )
+    )
+  );
+
+-- Estate Documents Storage
+-- Private bucket: documents are managed by the vault owner and become readable
+-- by their accepted trusted persons once the vault is unlocked. Files are stored
+-- under a path prefixed with the vault owner's user id, e.g. "<vault_owner_id>/<file>".
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('documents', 'documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Owner can manage their documents" ON storage.objects;
+DROP POLICY IF EXISTS "Trusted persons can view documents after unlock" ON storage.objects;
+
+CREATE POLICY "Owner can manage their documents"
+  ON storage.objects FOR ALL
+  USING (bucket_id = 'documents' AND auth.uid()::TEXT = (storage.foldername(name))[1])
+  WITH CHECK (bucket_id = 'documents' AND auth.uid()::TEXT = (storage.foldername(name))[1]);
+
+CREATE POLICY "Trusted persons can view documents after unlock"
+  ON storage.objects FOR SELECT
+  USING (
+    bucket_id = 'documents'
+    AND public.is_vault_unlocked_for(((storage.foldername(name))[1])::UUID)
+    AND EXISTS (
+      SELECT 1 FROM trusted_persons tp
+      WHERE tp.vault_owner_id::TEXT = (storage.foldername(name))[1]
+      AND tp.status = 'accepted'
+      AND tp.email = public.get_user_email()
+    )
+  );

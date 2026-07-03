@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, Text } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, TouchableOpacity, Text, AppState, AppStateStatus } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -8,6 +8,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../constants/theme';
 import SplashScreen from '../screens/splash/SplashScreen';
+import AppLockScreen from '../screens/auth/AppLockScreen';
+import { getBiometricLockEnabled } from '../services/appSettings';
+import { isBiometricAvailable } from '../services/auth';
 
 // Screens (we'll create these)
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -23,16 +26,25 @@ import DocumentsScreen from '../screens/estate/DocumentsScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import TrustedPersonsScreen from '../screens/settings/TrustedPersonsScreen';
 import DeathVerificationScreen from '../screens/estate/DeathVerificationScreen';
+import HeirWorkspaceScreen from '../screens/workspace/HeirWorkspaceScreen';
+import SubscriptionTrackerScreen from '../screens/workspace/SubscriptionTrackerScreen';
+import PaywallScreen from '../screens/settings/PaywallScreen';
 
 export type RootStackParamList = {
   Auth: { screen?: 'Login' | 'SignUp' } | undefined;
   Main: undefined;
   Onboarding: undefined;
-  VaultItemDetail: { itemId: string };
+  VaultItemDetail: { itemId: string; vaultOwnerId?: string };
   AddVaultItem: { category?: string; itemId?: string };
-  CategoryItems: { category: string };
+  CategoryItems: { category: string; vaultOwnerId?: string; vaultOwnerName?: string };
   DeathVerification: undefined;
-  TrustedPersons: undefined;
+  Checklist: { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
+  TrustedPersons: { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
+  WorkspaceVault: { vaultOwnerId: string; vaultOwnerName: string };
+  WorkspaceDocuments: { vaultOwnerId: string; vaultOwnerName: string };
+  Subscriptions: { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
+  HeirWorkspace: { vaultOwnerId: string };
+  Paywall: undefined;
   Login: undefined;
   SignUp: undefined;
 };
@@ -154,6 +166,8 @@ export default function AppNavigator() {
   const [showSplash, setShowSplash] = useState(true);
   const [splashDone, setSplashDone] = useState(false);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
+  const [locked, setLocked] = useState(false);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     // Check if user has seen onboarding
@@ -169,9 +183,38 @@ export default function AppNavigator() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const checkLockOnLaunch = async () => {
+      const enabled = await getBiometricLockEnabled();
+      const available = enabled && (await isBiometricAvailable());
+      if (available) setLocked(true);
+    };
+    checkLockOnLaunch();
+
+    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      const cameFromBackground =
+        appState.current.match(/inactive|background/) && nextState === 'active';
+      appState.current = nextState;
+
+      if (cameFromBackground) {
+        const enabled = await getBiometricLockEnabled();
+        const available = enabled && (await isBiometricAvailable());
+        if (available) setLocked(true);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [user]);
+
   // Show splash screen until both splash delay and auth loading are complete
   if (!splashDone || loading || hasSeenOnboarding === null) {
     return <SplashScreen />;
+  }
+
+  if (user && locked) {
+    return <AppLockScreen onUnlock={() => setLocked(false)} />;
   }
 
   return (
@@ -235,11 +278,18 @@ export default function AppNavigator() {
                 },
               }}
             />
-            <Stack.Screen 
-              name="TrustedPersons" 
+            <Stack.Screen
+              name="Checklist"
+              component={ChecklistScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="TrustedPersons"
               component={TrustedPersonsScreen}
-              options={{ 
-                headerShown: true, 
+              options={{
+                headerShown: true,
                 title: 'Trusted Persons',
                 headerStyle: {
                   backgroundColor: colors.navy,
@@ -250,6 +300,31 @@ export default function AppNavigator() {
                   fontWeight: '400',
                 },
               }}
+            />
+            <Stack.Screen
+              name="WorkspaceVault"
+              component={VaultScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="WorkspaceDocuments"
+              component={DocumentsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Subscriptions"
+              component={SubscriptionTrackerScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="HeirWorkspace"
+              component={HeirWorkspaceScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Paywall"
+              component={PaywallScreen}
+              options={{ headerShown: false, presentation: 'modal' }}
             />
           </>
         ) : (

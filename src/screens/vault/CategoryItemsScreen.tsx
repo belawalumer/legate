@@ -12,14 +12,16 @@ import { colors, borderRadius } from '../../constants/theme';
 export default function CategoryItemsScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const category = (route.params as any)?.category as VaultCategory;
-  
+  const params = route.params as { category: VaultCategory; vaultOwnerId?: string; vaultOwnerName?: string };
+  const category = params?.category;
+  const isViewingOtherVault = !!params?.vaultOwnerId;
+
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadItems();
-    
+
     // Reload when screen comes into focus (after adding new item)
     const unsubscribe = navigation.addListener('focus', () => {
       loadItems();
@@ -28,15 +30,21 @@ export default function CategoryItemsScreen() {
     return unsubscribe;
   }, [category, navigation]);
 
+  const resolveVaultOwnerId = async () => {
+    if (params?.vaultOwnerId) return params.vaultOwnerId;
+    const user = await getCurrentUser();
+    return user?.id || null;
+  };
+
   const loadItems = async () => {
     try {
-      const user = await getCurrentUser();
-      if (!user) return;
+      const vaultOwnerId = await resolveVaultOwnerId();
+      if (!vaultOwnerId) return;
 
       const { data, error } = await supabase
         .from('vault_items')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', vaultOwnerId)
         .eq('category', category)
         .order('created_at', { ascending: false });
 
@@ -559,34 +567,39 @@ export default function CategoryItemsScreen() {
       <View style={styles.itemContainer}>
         <View style={styles.itemHeader}>
           <Text style={styles.accountLabel}>
-            {category === 'banking' ? 'Account' : 
+            {category === 'banking' ? 'Account' :
              category === 'subscriptions' ? 'Subscription' :
              category === 'important_contacts' ? 'Contact' :
              category === 'legal_documents' ? 'Document' :
              category === 'final_wishes' ? 'Wish' :
              'Item'} {index + 1} of {items.length}
           </Text>
-          <View style={styles.itemActions}>
-            <TouchableOpacity
-              style={styles.itemActionBtn}
-              onPress={() => (navigation as any).navigate('AddVaultItem', { 
-                category: item.category, 
-                itemId: item.id 
-              })}
-            >
-              <Ionicons name="create-outline" size={16} color={colors.gold} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.itemActionBtn}
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash-outline" size={16} color={colors.error} />
-            </TouchableOpacity>
-          </View>
+          {!isViewingOtherVault && (
+            <View style={styles.itemActions}>
+              <TouchableOpacity
+                style={styles.itemActionBtn}
+                onPress={() => (navigation as any).navigate('AddVaultItem', {
+                  category: item.category,
+                  itemId: item.id
+                })}
+              >
+                <Ionicons name="create-outline" size={16} color={colors.gold} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.itemActionBtn}
+                onPress={handleDelete}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.error} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         <TouchableOpacity
           style={styles.fieldGroup}
-          onPress={() => (navigation as any).navigate('VaultItemDetail', { itemId: item.id })}
+          onPress={() => (navigation as any).navigate('VaultItemDetail', {
+            itemId: item.id,
+            vaultOwnerId: params?.vaultOwnerId,
+          })}
           activeOpacity={0.7}
         >
           {item.title && (
@@ -621,17 +634,21 @@ export default function CategoryItemsScreen() {
       {items.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No items yet</Text>
-          <Text style={styles.emptySubtext}>Tap the + button to add your first item</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => (navigation as any).navigate('AddVaultItem', { category })}
-          >
-            <Text style={styles.addButtonText}>Add Item</Text>
-          </TouchableOpacity>
+          {!isViewingOtherVault && (
+            <>
+              <Text style={styles.emptySubtext}>Tap the + button to add your first item</Text>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => (navigation as any).navigate('AddVaultItem', { category })}
+              >
+                <Text style={styles.addButtonText}>Add Item</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       ) : (
         <>
-          <ScrollView 
+          <ScrollView
             style={styles.body}
             contentContainerStyle={styles.bodyContent}
             refreshControl={
@@ -643,21 +660,23 @@ export default function CategoryItemsScreen() {
                 {renderItem({ item, index })}
               </React.Fragment>
             ))}
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.outlineButton}
-                onPress={() => (navigation as any).navigate('AddVaultItem', { category })}
-              >
-                <Text style={styles.outlineButtonText}>
-                  + Add {category === 'banking' ? 'Account' : 
-                         category === 'subscriptions' ? 'Subscription' :
-                         category === 'important_contacts' ? 'Contact' :
-                         category === 'legal_documents' ? 'Document' :
-                         category === 'final_wishes' ? 'Wish' :
-                         'Item'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {!isViewingOtherVault && (
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={styles.outlineButton}
+                  onPress={() => (navigation as any).navigate('AddVaultItem', { category })}
+                >
+                  <Text style={styles.outlineButtonText}>
+                    + Add {category === 'banking' ? 'Account' :
+                           category === 'subscriptions' ? 'Subscription' :
+                           category === 'important_contacts' ? 'Contact' :
+                           category === 'legal_documents' ? 'Document' :
+                           category === 'final_wishes' ? 'Wish' :
+                           'Item'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
         </>
       )}

@@ -11,8 +11,9 @@ import { colors, borderRadius } from '../../constants/theme';
 export default function VaultItemDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { itemId } = route.params as { itemId: string };
-  
+  const { itemId, vaultOwnerId } = route.params as { itemId: string; vaultOwnerId?: string };
+  const isViewingOtherVault = !!vaultOwnerId;
+
   const [item, setItem] = useState<any>(null);
   const [decryptedData, setDecryptedData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -24,17 +25,21 @@ export default function VaultItemDetailScreen() {
 
   const loadItemDetails = async () => {
     try {
-      const user = await getCurrentUser();
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in');
-        return;
+      let ownerId = vaultOwnerId;
+      if (!ownerId) {
+        const user = await getCurrentUser();
+        if (!user) {
+          Alert.alert('Error', 'You must be logged in');
+          return;
+        }
+        ownerId = user.id;
       }
 
       const { data, error } = await supabase
         .from('vault_items')
         .select('*')
         .eq('id', itemId)
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .single();
 
       if (error) throw error;
@@ -162,25 +167,29 @@ export default function VaultItemDetailScreen() {
           <Text style={styles.headerTitle}>
             {categoryInfo?.icon} {categoryInfo?.label || item.title}
           </Text>
-          <Text style={styles.headerSubtitle}>View account details</Text>
+          <Text style={styles.headerSubtitle}>
+            {isViewingOtherVault ? 'Read-only' : 'View account details'}
+          </Text>
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => (navigation as any).navigate('AddVaultItem', { 
-              category: item.category, 
-              itemId: item.id 
-            })}
-          >
-            <Ionicons name="create-outline" size={20} color={colors.gold} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={handleDelete}
-          >
-            <Ionicons name="trash-outline" size={20} color={colors.error} />
-          </TouchableOpacity>
-        </View>
+        {!isViewingOtherVault && (
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => (navigation as any).navigate('AddVaultItem', {
+                category: item.category,
+                itemId: item.id
+              })}
+            >
+              <Ionicons name="create-outline" size={20} color={colors.gold} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={handleDelete}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>

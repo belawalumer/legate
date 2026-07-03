@@ -1,26 +1,31 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
+import CryptoJS from 'crypto-js';
 import base64 from 'react-native-base64';
 
-const ENCRYPTION_KEY_STORAGE = 'encryption_key';
+const ENCRYPTION_KEY_STORAGE = 'encryption_key_v2';
+const LEGACY_ENCRYPTION_KEY_STORAGE = 'encryption_key';
+const AES_PREFIX = 'v2:';
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 /**
- * Generate or retrieve encryption key for the user
- * In production, this should be derived from user's password/biometric
+ * Generate or retrieve the device's AES-256 key (stored in the platform keychain/keystore).
  */
 export async function getOrCreateEncryptionKey(): Promise<string> {
   try {
     let key = await SecureStore.getItemAsync(ENCRYPTION_KEY_STORAGE);
-    
+
     if (!key) {
-      // Generate a new 256-bit key
-      key = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        `${Date.now()}-${Math.random()}-${await Crypto.getRandomBytesAsync(32)}`
-      );
+      const randomBytes = await Crypto.getRandomBytesAsync(32);
+      key = bytesToHex(randomBytes); // 256-bit key, hex-encoded
       await SecureStore.setItemAsync(ENCRYPTION_KEY_STORAGE, key);
     }
-    
+
     return key;
   } catch (error) {
     console.error('Error getting encryption key:', error);
@@ -29,24 +34,30 @@ export async function getOrCreateEncryptionKey(): Promise<string> {
 }
 
 /**
- * Simple AES-256 encryption using expo-crypto
- * Note: For production, consider using a more robust encryption library
- * like react-native-aes-crypto or expo-crypto with proper AES implementation
+ * Retrieve the old (pre-AES) key, used only to decrypt data written before the AES migration.
+ */
+async function getLegacyEncryptionKey(): Promise<string | null> {
+  return SecureStore.getItemAsync(LEGACY_ENCRYPTION_KEY_STORAGE);
+}
+
+/**
+ * Encrypt data with AES-256-CBC. A random IV is generated per call and stored
+ * alongside the ciphertext (IV does not need to be secret, only unpredictable).
  */
 export async function encryptData(data: string): Promise<string> {
   try {
     const key = await getOrCreateEncryptionKey();
-    // This is a simplified encryption - in production, use proper AES-256
-    // For now, we'll use a hash-based approach (not true encryption, but better than plain text)
-    const encrypted = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      `${key}-${data}`
-    );
-    
-    // In production, replace with proper AES-256 encryption
-    // For MVP, we'll store a hash + base64 encoded data
-    const encoded = base64.encode(data);
-    return `${encrypted}:${encoded}`;
+    const keyWordArray = CryptoJS.enc.Hex.parse(key);
+    const ivBytes = await Crypto.getRandomBytesAsync(16);
+    const iv = CryptoJS.enc.Hex.parse(bytesToHex(ivBytes));
+
+    const ciphertext = CryptoJS.AES.encrypt(data, keyWordArray, {
+      iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7,
+    }).ciphertext.toString(CryptoJS.enc.Base64);
+
+    return `${AES_PREFIX}${bytesToHex(ivBytes)}:${ciphertext}`;
   } catch (error) {
     console.error('Error encrypting data:', error);
     throw error;
@@ -54,7 +65,8 @@ export async function encryptData(data: string): Promise<string> {
 }
 
 /**
- * Decrypt data
+ * Decrypt data. Supports the current AES-256-CBC format as well as the older
+ * pre-AES formats (hash:base64 and plain base64) so existing vault items still open.
  */
 export async function decryptData(encryptedData: string): Promise<string> {
   try {
@@ -62,47 +74,55 @@ export async function decryptData(encryptedData: string): Promise<string> {
       throw new Error('Invalid encrypted data: data is empty or not a string');
     }
 
-    const key = await getOrCreateEncryptionKey();
+    if (encryptedData.startsWith(AES_PREFIX)) {
+      const key = await getOrCreateEncryptionKey();
+      const keyWordArray = CryptoJS.enc.Hex.parse(key);
+      const rest = encryptedData.slice(AES_PREFIX.length);
+      const [ivHex, ciphertextB64] = rest.split(':');
+
+      if (!ivHex || !ciphertextB64) {
+        throw new Error('Invalid encrypted data format: missing IV or ciphertext');
+      }
+
+      const iv = CryptoJS.enc.Hex.parse(ivHex);
+      const ciphertext = CryptoJS.enc.Base64.parse(ciphertextB64);
+
+      const decrypted = CryptoJS.AES.decrypt(
+        { ciphertext } as CryptoJS.lib.CipherParams,
+        keyWordArray,
+        { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+      );
+
+      return decrypted.toString(CryptoJS.enc.Utf8);
+    }
+
+    // Legacy formats predating real AES support.
+    const legacyKey = await getLegacyEncryptionKey();
     const parts = encryptedData.split(':');
-    
-    // Handle both old format (just base64) and new format (hash:base64)
     let decoded: string;
-    
+
     if (parts.length === 2) {
-      // New format: hash:base64
-      const [hash, encoded] = parts;
-      
+      // Legacy format: sha256(key-data):base64(data)
+      const [, encoded] = parts;
+
       if (!encoded) {
         throw new Error('Invalid encrypted data format: missing encoded data');
       }
-      
-      // Decode base64
+
       try {
         decoded = base64.decode(encoded);
       } catch (e) {
         throw new Error('Failed to decode base64 data');
       }
-      
-      // Verify hash (in production, use proper AES decryption)
-      const verifyHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        `${key}-${decoded}`
-      );
-      
-      if (verifyHash !== hash) {
-        // If hash doesn't match, try to decode anyway (for backward compatibility)
-        // This handles cases where the key might have changed
-        console.warn('Hash verification failed, attempting to decode anyway');
-      }
     } else {
-      // Old format: just base64 (for backward compatibility)
+      // Oldest format: plain base64
       try {
         decoded = base64.decode(encryptedData);
       } catch (e) {
         throw new Error('Failed to decode base64 data');
       }
     }
-    
+
     return decoded;
   } catch (error) {
     console.error('Error decrypting data:', error);
@@ -117,15 +137,15 @@ export async function encryptSensitiveFields<T extends Record<string, any>>(
   data: T,
   sensitiveFields: string[]
 ): Promise<T> {
-  const encrypted = { ...data };
-  
+  const encrypted: Record<string, any> = { ...data };
+
   for (const field of sensitiveFields) {
     if (encrypted[field] && typeof encrypted[field] === 'string') {
       encrypted[field] = await encryptData(encrypted[field]);
     }
   }
-  
-  return encrypted;
+
+  return encrypted as T;
 }
 
 /**
@@ -135,8 +155,8 @@ export async function decryptSensitiveFields<T extends Record<string, any>>(
   data: T,
   sensitiveFields: string[]
 ): Promise<T> {
-  const decrypted = { ...data };
-  
+  const decrypted: Record<string, any> = { ...data };
+
   for (const field of sensitiveFields) {
     if (decrypted[field] && typeof decrypted[field] === 'string') {
       try {
@@ -147,6 +167,6 @@ export async function decryptSensitiveFields<T extends Record<string, any>>(
       }
     }
   }
-  
-  return decrypted;
+
+  return decrypted as T;
 }

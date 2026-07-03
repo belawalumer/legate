@@ -2,6 +2,7 @@
   "expo": {
     "name": "Legate",
     "slug": "legate",
+    "scheme": "legate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.legate.app"
+      "bundleIdentifier": "com.legate.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Legate uses Face ID to unlock your vault."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +34,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "expo-web-browser"
     ]
   }
 }

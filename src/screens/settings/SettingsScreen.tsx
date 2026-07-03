@@ -5,20 +5,50 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { signOut, getCurrentUser } from '../../services/auth';
+import { signOut, getCurrentUser, isBiometricAvailable } from '../../services/auth';
 import { supabase } from '../../services/supabase';
 import { colors, borderRadius } from '../../constants/theme';
+import { PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
+import {
+  getBiometricLockEnabled,
+  setBiometricLockEnabled,
+  getNotificationsEnabled,
+  setNotificationsEnabled,
+} from '../../services/appSettings';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [biometricEnabled, setBiometricEnabled] = useState(true);
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
 
   useEffect(() => {
     loadUserProfile();
+    getBiometricLockEnabled().then(setBiometricEnabledState);
+    getNotificationsEnabled().then(setNotificationsEnabledState);
   }, []);
+
+  const handleToggleBiometric = async (value: boolean) => {
+    if (value) {
+      const available = await isBiometricAvailable();
+      if (!available) {
+        Alert.alert(
+          'Biometrics Not Available',
+          'Set up Face ID, Touch ID, or a device PIN in your phone settings to enable this.'
+        );
+        return;
+      }
+    }
+    setBiometricEnabledState(value);
+    await setBiometricLockEnabled(value);
+  };
+
+  const handleToggleNotifications = async (value: boolean) => {
+    setNotificationsEnabledState(value);
+    await setNotificationsEnabled(value);
+  };
 
   const loadUserProfile = async () => {
     try {
@@ -104,7 +134,9 @@ export default function SettingsScreen() {
               {userProfile?.email || ''}
             </Text>
             <View style={styles.planBadge}>
-              <Text style={styles.planBadgeText}>Essential Plan</Text>
+              <Text style={styles.planBadgeText}>
+                {PLAN_LABELS[(userProfile?.subscription_plan as SubscriptionPlan) || 'free']} Plan
+              </Text>
             </View>
           </View>
         </View>
@@ -113,39 +145,78 @@ export default function SettingsScreen() {
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
         {/* Security Settings */}
         <View style={styles.settingsGroup}>
-          <TouchableOpacity style={styles.settingRow}>
+          <View style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
               <Text style={styles.settingIcon}>🔒</Text>
-              <Text style={styles.settingRowLabel}>Biometric Lock</Text>
+              <View>
+                <Text style={styles.settingRowLabel}>Biometric Lock</Text>
+                <Text style={styles.settingRowHint}>Require Face ID / Touch ID to open the app</Text>
+              </View>
             </View>
             <Switch
               value={biometricEnabled}
-              onValueChange={setBiometricEnabled}
+              onValueChange={handleToggleBiometric}
               trackColor={{ false: colors.border, true: colors.navy }}
               thumbColor={biometricEnabled ? colors.gold : colors.textMuted}
             />
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity style={styles.settingRow}>
-            <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>⏱️</Text>
-              <Text style={styles.settingRowLabel}>Auto-lock</Text>
-            </View>
-            <Text style={styles.settingRowValue}>5 min ›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingRow}>
+          <View style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
               <Text style={styles.settingIcon}>🔔</Text>
-              <Text style={styles.settingRowLabel}>Notifications</Text>
+              <View>
+                <Text style={styles.settingRowLabel}>Notifications</Text>
+                <Text style={styles.settingRowHint}>Vault and estate activity alerts</Text>
+              </View>
             </View>
-            <Text style={styles.settingRowValue}>On ›</Text>
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={handleToggleNotifications}
+              trackColor={{ false: colors.border, true: colors.navy }}
+              thumbColor={notificationsEnabled ? colors.gold : colors.textMuted}
+            />
+          </View>
+        </View>
+
+        {/* Estate Settings */}
+        <View style={styles.settingsGroup}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('DeathVerification')}
+          >
+            <View style={styles.settingRowLeft}>
+              <Text style={styles.settingIcon}>🔓</Text>
+              <Text style={styles.settingRowLabel}>Vault Unlock Requests</Text>
+            </View>
+            <Text style={styles.settingRowValue}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('Checklist')}
+          >
+            <View style={styles.settingRowLeft}>
+              <Text style={styles.settingIcon}>✅</Text>
+              <Text style={styles.settingRowLabel}>Estate Checklist</Text>
+            </View>
+            <Text style={styles.settingRowValue}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('Subscriptions')}
+          >
+            <View style={styles.settingRowLeft}>
+              <Text style={styles.settingIcon}>📺</Text>
+              <Text style={styles.settingRowLabel}>Subscriptions</Text>
+            </View>
+            <Text style={styles.settingRowValue}>›</Text>
           </TouchableOpacity>
         </View>
 
         {/* Account Settings */}
         <View style={styles.settingsGroup}>
-          <TouchableOpacity style={styles.settingRow}>
+          <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Paywall')}>
             <View style={styles.settingRowLeft}>
               <Text style={styles.settingIcon}>💎</Text>
               <Text style={styles.settingRowLabel}>Upgrade Plan</Text>
@@ -308,6 +379,11 @@ const styles = StyleSheet.create({
   settingRowLabel: {
     fontSize: 14,
     color: colors.textPrimary,
+  },
+  settingRowHint: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   settingRowValue: {
     fontSize: 13,

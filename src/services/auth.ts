@@ -1,5 +1,10 @@
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+import { getQueryParams } from 'expo-auth-session/build/QueryParams';
 import { supabase } from './supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 /**
  * Check if biometric authentication is available
@@ -66,6 +71,28 @@ export async function signUpWithEmail(email: string, password: string, fullName:
 }
 
 /**
+ * Accept any pending trusted-person invitations addressed to this user's email.
+ * Safe to call on every login - it's a no-op if there are no pending invites.
+ */
+export async function acceptPendingTrustedPersonInvites(): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const email = user?.email;
+  if (!email) return;
+
+  const { error } = await supabase
+    .from('trusted_persons')
+    .update({ status: 'accepted' })
+    .eq('email', email)
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error('Error accepting trusted person invites:', error);
+  }
+}
+
+/**
  * Sign out
  */
 export async function signOut() {
@@ -88,10 +115,53 @@ export async function signInWithMagicLink(email: string) {
   const { data, error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: 'householdvault://auth/callback',
+      emailRedirectTo: AuthSession.makeRedirectUri({ path: 'auth/callback' }),
     },
   });
-  
+
   if (error) throw error;
   return data;
+}
+
+/**
+ * Sign in (or sign up) with Google via Supabase OAuth
+ */
+export async function signInWithGoogle() {
+  const redirectTo = AuthSession.makeRedirectUri({ path: 'auth/callback' });
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true,
+    },
+  });
+
+  if (error) throw error;
+  if (!data.url) throw new Error('No OAuth URL returned from Supabase');
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+  if (result.type !== 'success' || !result.url) {
+    if (result.type === 'cancel' || result.type === 'dismiss') {
+      throw new Error('Google sign-in was cancelled');
+    }
+    throw new Error('Google sign-in failed');
+  }
+
+  const { params, errorCode } = getQueryParams(result.url);
+  if (errorCode) throw new Error(errorCode);
+
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) {
+    throw new Error('No session tokens returned from Google sign-in');
+  }
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+
+  if (sessionError) throw sessionError;
+  return sessionData;
 }
