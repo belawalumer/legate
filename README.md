@@ -1,98 +1,80 @@
-# Send Invitation Email Edge Function
+# Legate
 
-This Edge Function sends invitation emails to trusted persons when they are added to a vault.
+A digital estate/legacy vault app. Lets a **vault owner** securely record financial accounts, legal documents, digital assets, and final wishes, and designate **trusted persons** who can request access after the owner's death.
 
-## Setup Instructions
+See [FUNCTIONALITY.md](./FUNCTIONALITY.md) for a full breakdown of what's implemented vs. stubbed.
 
-### 1. Deploy the Edge Function
+## Tech Stack
+
+- **Client**: Expo / React Native, TypeScript, React Navigation (stack + bottom tabs)
+- **Backend**: Supabase (Postgres, Auth, Row Level Security, Edge Functions)
+- **Email**: Resend, via a Supabase Edge Function
+- **UI**: React Native Paper, custom navy/gold theme (`src/constants/theme.ts`)
+
+## Modules
+
+- `src/screens/auth` — login, sign up
+- `src/screens/onboarding` — first-run welcome flow
+- `src/screens/home` — dashboard with vault health score
+- `src/screens/vault` — vault categories, item CRUD, item detail
+- `src/screens/settings` — profile, trusted persons management
+- `src/screens/estate` — estate checklist, document uploads, death verification (currently stubbed)
+- `src/services` — Supabase client, auth, client-side data obfuscation
+- `src/navigation` — app-wide navigation and auth-gated routing
+- `supabase/` — database schema and edge functions
+
+## Features
+
+- Email/password and magic-link authentication
+- Vault with 11 categories (banking, investments, insurance, loans/debts, subscriptions, real estate, vehicles, contacts, digital assets, legal documents, final wishes)
+- Sensitive field masking in vault item views
+- Vault health score based on category coverage
+- Trusted person invitations with email notifications
+- Row Level Security-backed data access on the backend
+
+## Dev Setup
+
+### Prerequisites
+
+- Node.js and npm
+- Expo CLI (`npm install -g expo-cli`, or use `npx expo`)
+- A Supabase project
+
+### 1. Install dependencies
 
 ```bash
-# Install Supabase CLI if you haven't already
-npm install -g supabase
-
-# Login to Supabase
-supabase login
-
-# Link your project
-supabase link --project-ref your-project-ref
-
-# Deploy the function
-supabase functions deploy send-invitation
+npm install
 ```
 
-### 2. Configure Email Service
+### 2. Configure environment variables
 
-The function currently has a placeholder for email sending. You need to integrate with an email service. Here are popular options:
+Create a `.env` file in the project root:
 
-#### Option A: Using Resend (Recommended - Free tier available)
+```
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-1. Sign up at https://resend.com
-2. Get your API key
-3. Add it as a Supabase secret:
+### 3. Set up the database
+
+Apply `supabase/schema.sql` to your Supabase project (via the SQL editor or `supabase db push`).
+
+### 4. Run the app
 
 ```bash
+npm start        # Expo dev server
+npm run ios      # iOS simulator
+npm run android  # Android emulator
+npm run web      # Web
+```
+
+### 5. (Optional) Deploy the invitation email function
+
+```bash
+supabase login
+supabase link --project-ref your-project-ref
+supabase functions deploy send-invitation
 supabase secrets set RESEND_API_KEY=your_resend_api_key
 ```
 
-4. Update the function to use Resend:
-
-```typescript
-// Add at the top of index.ts
-import { Resend } from 'https://esm.sh/resend@2.0.0';
-
-// Replace the email sending section with:
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
-
-const { data, error } = await resend.emails.send({
-  from: 'Legate <noreply@yourdomain.com>',
-  to: email,
-  subject: subject,
-  html: htmlBody,
-  text: textBody,
-});
-
-if (error) {
-  console.error('Resend error:', error);
-  throw error;
-}
-```
-
-#### Option B: Using SendGrid
-
-1. Sign up at https://sendgrid.com
-2. Get your API key
-3. Add it as a Supabase secret:
-
-```bash
-supabase secrets set SENDGRID_API_KEY=your_sendgrid_api_key
-```
-
-4. Update the function to use SendGrid (similar to Resend)
-
-#### Option C: Using AWS SES
-
-1. Set up AWS SES
-2. Add credentials as secrets
-3. Use AWS SDK in the function
-
-### 3. Set Required Secrets
-
-```bash
-supabase secrets set SUPABASE_URL=your_supabase_url
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-```
-
-### 4. Test the Function
-
-After deployment, the function will be automatically called when a trusted person is invited from the app.
-
-## Current Status
-
-⚠️ **The function is currently a template and does NOT send emails yet.** 
-
-You must:
-1. Deploy the function to Supabase
-2. Integrate with an email service (Resend, SendGrid, etc.)
-3. Add the email service API key as a secret
-
-Until then, invitations will be saved to the database but no emails will be sent.
+Without `RESEND_API_KEY` configured, trusted person invitations are still saved to the database, but no email is sent.
