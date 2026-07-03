@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, borderRadius } from '../../constants/theme';
@@ -20,6 +21,10 @@ function getInitials(name: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 1);
+}
+
+function capitalize(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
 }
 
 export default function HeirWorkspaceScreen() {
@@ -110,12 +115,12 @@ export default function HeirWorkspaceScreen() {
       <View style={styles.body}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statIcon}>✅</Text>
+            <Ionicons name="checkmark-circle-outline" size={22} color={colors.navy} style={styles.statIcon} />
             <Text style={styles.statNum}>{completedCount}/{tasks.length}</Text>
             <Text style={styles.statLabel}>Tasks Complete</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statIcon}>💰</Text>
+            <Ionicons name="cash-outline" size={22} color={colors.navy} style={styles.statIcon} />
             <Text style={styles.statNum}>${monthlySavings.toFixed(0)}</Text>
             <Text style={styles.statLabel}>Monthly Saved</Text>
           </View>
@@ -123,41 +128,44 @@ export default function HeirWorkspaceScreen() {
 
         <View style={styles.quickActions}>
           <QuickAction
-            icon="🔐"
+            icon="lock-open-outline"
             label="View Vault"
             onPress={() => navigation.navigate('WorkspaceVault', { vaultOwnerId, vaultOwnerName })}
           />
           <QuickAction
-            icon="✅"
+            icon="checkmark-done-outline"
             label="Checklist"
             onPress={() => navigation.navigate('Checklist', { vaultOwnerId, vaultOwnerName })}
           />
           <QuickAction
-            icon="📞"
+            icon="call-outline"
             label="Contacts"
             onPress={() => navigation.navigate('TrustedPersons', { vaultOwnerId, vaultOwnerName })}
           />
           <QuickAction
-            icon="📺"
+            icon="repeat-outline"
             label="Subscriptions"
             onPress={() => navigation.navigate('Subscriptions', { vaultOwnerId, vaultOwnerName })}
           />
           <QuickAction
-            icon="📁"
+            icon="folder-open-outline"
             label="Documents"
             onPress={() => navigation.navigate('WorkspaceDocuments', { vaultOwnerId, vaultOwnerName })}
           />
-          <QuickAction icon="📊" label="Activity" onPress={() => comingSoon('The activity log')} />
+          <QuickAction icon="stats-chart-outline" label="Activity" onPress={() => comingSoon('The activity log')} />
         </View>
 
         {urgentTasks.length > 0 && (
           <View style={styles.urgentCard}>
             <Text style={styles.sectionTitle}>Urgent Tasks</Text>
-            {urgentTasks.map((t) => (
-              <View key={t.id} style={styles.urgentRow}>
+            {urgentTasks.map((t, i) => (
+              <View
+                key={t.id}
+                style={[styles.urgentRow, i === urgentTasks.length - 1 && styles.urgentRowLast]}
+              >
                 <View style={styles.priorityDot} />
                 <Text style={styles.urgentTaskTitle} numberOfLines={1}>{t.title}</Text>
-                <Text style={styles.urgentTaskCategory}>{t.category}</Text>
+                <Text style={styles.urgentTaskCategory}>{capitalize(t.category)}</Text>
               </View>
             ))}
           </View>
@@ -167,10 +175,18 @@ export default function HeirWorkspaceScreen() {
   );
 }
 
-function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function QuickAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <TouchableOpacity style={styles.qaBtn} onPress={onPress} activeOpacity={0.8}>
-      <Text style={styles.qaIcon}>{icon}</Text>
+      <Ionicons name={icon} size={20} color={colors.gold} style={styles.qaIcon} />
       <Text style={styles.qaLabel}>{label}</Text>
     </TouchableOpacity>
   );
@@ -270,7 +286,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   statIcon: {
-    fontSize: 20,
     marginBottom: 8,
   },
   statNum: {
@@ -299,7 +314,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(201,168,76,0.15)',
   },
   qaIcon: {
-    fontSize: 20,
     marginBottom: 6,
   },
   qaLabel: {
@@ -330,6 +344,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  urgentRowLast: {
+    borderBottomWidth: 0,
   },
   priorityDot: {
     width: 6,
