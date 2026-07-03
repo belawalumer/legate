@@ -138,6 +138,20 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
+-- Whether the current user is an accepted trusted person on the given vault.
+-- SECURITY DEFINER so this can be used inside a trusted_persons RLS policy
+-- without the inner query re-triggering RLS on trusted_persons itself
+-- (which would otherwise cause infinite recursion).
+CREATE OR REPLACE FUNCTION public.is_accepted_trusted_person_for(owner_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM trusted_persons tp
+    WHERE tp.vault_owner_id = owner_id
+    AND tp.status = 'accepted'
+    AND tp.email = public.get_user_email()
+  );
+$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+
 -- Row Level Security (RLS) Policies
 
 -- Enable RLS on all tables
@@ -233,6 +247,17 @@ CREATE POLICY "Users can manage their trusted persons"
 CREATE POLICY "Trusted persons can view their own records"
   ON trusted_persons FOR SELECT
   USING (email = public.get_user_email());
+
+-- Once a vault is unlocked, an accepted trusted person on that vault can see
+-- the rest of the trusted-person roster for the same vault (family workspace
+-- member list) - mirrors "Trusted persons can view vault after death
+-- verification" on vault_items.
+CREATE POLICY "Trusted persons can view vault roster after unlock"
+  ON trusted_persons FOR SELECT
+  USING (
+    public.is_vault_unlocked_for(trusted_persons.vault_owner_id)
+    AND public.is_accepted_trusted_person_for(trusted_persons.vault_owner_id)
+  );
 
 -- Trusted persons can accept their own pending invitation (status only; see
 -- enforce_trusted_person_self_update trigger below for the column-level guard)
