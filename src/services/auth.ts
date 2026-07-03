@@ -59,9 +59,10 @@ export async function signUpWithEmail(email: string, password: string, fullName:
       data: {
         full_name: fullName,
       },
+      emailRedirectTo: AuthSession.makeRedirectUri({ path: 'auth/callback' }),
     },
   });
-  
+
   if (error) throw error;
   
   // User profile is automatically created by database trigger
