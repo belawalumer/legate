@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signUpWithEmail, signInWithGoogle } from '../../services/auth';
 import { supabase } from '../../services/supabase';
 import { colors, borderRadius } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
 
 export default function SignUpScreen({ navigation }: any) {
   const [fullName, setFullName] = useState('');
@@ -79,7 +80,15 @@ export default function SignUpScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.header}>
         <LinearGradient
           colors={['rgba(201,168,76,0.2)', 'transparent']}
@@ -186,13 +195,7 @@ export default function SignUpScreen({ navigation }: any) {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, styles.googleButton]}
-          onPress={handleGoogleSignUp}
-          disabled={googleLoading}
-        >
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </TouchableOpacity>
+        <GoogleSignInButton onPress={handleGoogleSignUp} loading={googleLoading} />
 
       <TouchableOpacity
         onPress={() => navigation.navigate('Login')}
@@ -201,7 +204,8 @@ export default function SignUpScreen({ navigation }: any) {
         <Text style={styles.linkText}>Already have an account? <Text style={styles.linkTextBold}>Sign in</Text></Text>
       </TouchableOpacity>
       </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -209,6 +213,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     backgroundColor: colors.navy,
@@ -240,9 +247,9 @@ const styles = StyleSheet.create({
     lineHeight: 36,
   },
   formContainer: {
-    flex: 1,
     padding: 28,
     paddingTop: 24,
+    paddingBottom: 40,
     display: 'flex',
     flexDirection: 'column',
   },
@@ -273,7 +280,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    marginTop: 'auto',
+    marginTop: 4,
     marginBottom: 12,
   },
   primaryButton: {
@@ -309,18 +316,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     letterSpacing: 1,
-  },
-  googleButton: {
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    marginTop: 0,
-  },
-  googleButtonText: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.5,
   },
   linkButton: {
     marginTop: 12,

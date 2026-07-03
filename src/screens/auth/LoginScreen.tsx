@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { signInWithEmail, signInWithMagicLink, signInWithGoogle } from '../../services/auth';
 import { colors, borderRadius } from '../../constants/theme';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
@@ -101,13 +102,7 @@ export default function LoginScreen({ navigation }: any) {
         <View style={styles.dividerLine} />
       </View>
 
-      <TouchableOpacity
-        style={[styles.button, styles.googleButton]}
-        onPress={handleGoogleLogin}
-        disabled={googleLoading}
-      >
-        <Text style={styles.googleButtonText}>Continue with Google</Text>
-      </TouchableOpacity>
+      <GoogleSignInButton onPress={handleGoogleLogin} loading={googleLoading} style={styles.googleButtonSpacing} />
 
       <TouchableOpacity
         onPress={() => (navigation as any).navigate('SignUp')}
@@ -187,16 +182,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     letterSpacing: 1,
   },
-  googleButton: {
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  googleButtonText: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  googleButtonSpacing: {
+    marginBottom: 12,
   },
   linkButton: {
     marginTop: 24,
