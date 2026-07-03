@@ -29,6 +29,7 @@ import DeathVerificationScreen from '../screens/estate/DeathVerificationScreen';
 import HeirWorkspaceScreen from '../screens/workspace/HeirWorkspaceScreen';
 import SubscriptionTrackerScreen from '../screens/workspace/SubscriptionTrackerScreen';
 import PaywallScreen from '../screens/settings/PaywallScreen';
+import LegalDocumentScreen, { LegalDocumentContent } from '../screens/settings/LegalDocumentScreen';
 
 export type RootStackParamList = {
   Auth: { screen?: 'Login' | 'SignUp' } | undefined;
@@ -45,6 +46,7 @@ export type RootStackParamList = {
   Subscriptions: { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
   HeirWorkspace: { vaultOwnerId: string };
   Paywall: undefined;
+  LegalDocument: { content: LegalDocumentContent };
   Login: undefined;
   SignUp: undefined;
 };
@@ -344,6 +346,11 @@ export default function AppNavigator() {
               name="Paywall"
               component={PaywallScreen}
               options={{ headerShown: false, presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="LegalDocument"
+              component={LegalDocumentScreen}
+              options={{ headerShown: false }}
             />
           </>
         ) : (

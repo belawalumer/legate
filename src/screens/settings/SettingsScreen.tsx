@@ -19,6 +19,7 @@ import {
   AUTO_LOCK_OPTIONS,
 } from '../../services/appSettings';
 import { alert } from '../../components/AppAlert';
+import { PRIVACY_POLICY, TERMS_OF_SERVICE } from '../../constants/legalContent';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -270,7 +271,10 @@ export default function SettingsScreen() {
             <Text style={styles.settingRowValue}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingRow}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('LegalDocument', { content: PRIVACY_POLICY })}
+          >
             <View style={styles.settingRowLeft}>
               <SettingIcon name="shield-checkmark-outline" />
               <Text style={styles.settingRowLabel}>Privacy Policy</Text>
@@ -278,7 +282,10 @@ export default function SettingsScreen() {
             <Text style={styles.settingRowValue}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingRow}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('LegalDocument', { content: TERMS_OF_SERVICE })}
+          >
             <View style={styles.settingRowLeft}>
               <SettingIcon name="document-text-outline" />
               <Text style={styles.settingRowLabel}>Terms of Service</Text>
