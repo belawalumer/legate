@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
@@ -208,9 +208,14 @@ export default function AddVaultItemScreen() {
           <Text style={styles.loadingText}>Loading item...</Text>
         </View>
       ) : (
-      <ScrollView 
-        style={styles.body}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+      <ScrollView
         contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.label}>Title</Text>
       <TextInput
@@ -795,6 +800,7 @@ export default function AddVaultItemScreen() {
         <Text style={styles.buttonText}>{isEditMode ? 'Update Item' : 'Save'}</Text>
       </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
       )}
     </View>
   );
@@ -869,6 +875,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   body: {
+    flex: 1,
+  },
+  keyboardAvoider: {
     flex: 1,
   },
   contentContainer: {
