@@ -275,7 +275,7 @@ export default function SettingsScreen() {
           onPress={handleSignOut}
           activeOpacity={0.7}
         >
-          <Text style={styles.signOutIcon}>🚪</Text>
+          <Ionicons name="log-out-outline" size={20} color={colors.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -400,9 +400,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139,58,58,0.15)',
     padding: 14,
     paddingHorizontal: 16,
-  },
-  signOutIcon: {
-    fontSize: 20,
   },
   signOutText: {
     fontSize: 14,
