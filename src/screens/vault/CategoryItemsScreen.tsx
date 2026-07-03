@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../../services/supabase';
@@ -19,6 +19,7 @@ export default function CategoryItemsScreen() {
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
     loadItems();
@@ -79,6 +80,7 @@ export default function CategoryItemsScreen() {
       alert('Error', error.message);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -627,12 +629,18 @@ export default function CategoryItemsScreen() {
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{categoryInfo?.icon} {categoryInfo?.label}</Text>
           <Text style={styles.headerSubtitle}>
-            {items.length} {category === 'banking' ? 'account' : category === 'subscriptions' ? 'subscription' : category === 'important_contacts' ? 'contact' : category === 'legal_documents' ? 'document' : category === 'final_wishes' ? 'wish' : 'item'}{items.length !== 1 ? 's' : ''} stored · encrypted
+            {initialLoading
+              ? 'Loading…'
+              : `${items.length} ${category === 'banking' ? 'account' : category === 'subscriptions' ? 'subscription' : category === 'important_contacts' ? 'contact' : category === 'legal_documents' ? 'document' : category === 'final_wishes' ? 'wish' : 'item'}${items.length !== 1 ? 's' : ''} stored · encrypted`}
           </Text>
         </View>
       </View>
 
-      {items.length === 0 ? (
+      {initialLoading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator color={colors.navy} />
+        </View>
+      ) : items.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No items yet</Text>
           {!isViewingOtherVault && (
