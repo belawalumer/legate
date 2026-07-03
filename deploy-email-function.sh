@@ -34,8 +34,17 @@ supabase link --project-ref "$PROJECT_REF"
 
 # Step 3: Set Resend API key as secret
 echo ""
-echo "📝 Step 3: Setting Resend API key as secret..."
-supabase secrets set RESEND_API_KEY=re_MXng5bm9_HxC1mpwMXgMgwVVNGa3R6TGk
+echo "📝 Step 3: Set your Resend API key as a secret"
+echo "   Get a key from https://resend.com/api-keys"
+read -s -p "Enter your Resend API key: " RESEND_API_KEY
+echo ""
+
+if [ -z "$RESEND_API_KEY" ]; then
+    echo "❌ Resend API key is required"
+    exit 1
+fi
+
+supabase secrets set RESEND_API_KEY="$RESEND_API_KEY"
 
 # Step 4: Deploy the function
 echo ""
