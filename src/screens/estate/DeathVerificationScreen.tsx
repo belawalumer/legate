@@ -162,100 +162,140 @@ export default function DeathVerificationScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color={colors.navy} />
+        <ActivityIndicator color={colors.gold} />
       </View>
     );
   }
 
+  const hasAnyActiveRequest =
+    memberships.some((m) =>
+      (requestsByVault[m.vaultOwnerId] || []).some(
+        (r) => r.status === 'awaiting_confirmation' || r.status === 'confirmed'
+      )
+    ) || ownVaultRequests.length > 0;
+
+  const hasPendingRequest =
+    memberships.some((m) =>
+      (requestsByVault[m.vaultOwnerId] || []).some(
+        (r) =>
+          (r.status === 'awaiting_confirmation' || r.status === 'confirmed') && !isRequestUnlocked(r)
+      )
+    ) ||
+    ownVaultRequests.some(
+      (r) => r.status !== 'rejected' && !isRequestUnlocked(r)
+    );
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Vaults I'm trusted on */}
-      <Text style={styles.sectionTitle}>Your Responsibilities</Text>
-      {memberships.length === 0 && (
-        <Text style={styles.emptyText}>You aren't currently a trusted person on any vault.</Text>
-      )}
-      {memberships.map((m) => {
-        const requests = requestsByVault[m.vaultOwnerId] || [];
-        const activeRequest = requests.find((r) => r.status === 'awaiting_confirmation' || r.status === 'confirmed');
-        return (
-          <View key={m.vaultOwnerId} style={styles.card}>
-            <Text style={styles.cardTitle}>{m.vaultOwnerName}'s Vault</Text>
+    <View style={styles.container}>
+      <View style={styles.headerGlow} pointerEvents="none" />
 
-            {!activeRequest && (
-              <>
-                <Text style={styles.cardBody}>
-                  If this person has passed away, you can request access. A second trusted person must confirm, then a {DEATH_VERIFICATION_WAITING_PERIOD_HOURS}-hour waiting period applies before the vault unlocks.
-                </Text>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => handleRequestUnlock(m)}
-                  disabled={busyId === m.vaultOwnerId}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {busyId === m.vaultOwnerId ? 'Uploading...' : 'Request Vault Unlock'}
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {activeRequest && (
-              <RequestStatusCard
-                request={activeRequest}
-                canConfirm={
-                  activeRequest.status === 'awaiting_confirmation' &&
-                  activeRequest.requested_by !== m.myTrustedPersonId
-                }
-                onConfirm={() => handleConfirm(m, activeRequest)}
-                busy={busyId === activeRequest.id}
-              />
-            )}
-
-            {activeRequest && isRequestUnlocked(activeRequest) && (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => navigation.navigate('HeirWorkspace', { vaultOwnerId: m.vaultOwnerId })}
-              >
-                <Text style={styles.primaryButtonText}>Enter Family Workspace</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        );
-      })}
-
-      {/* My own vault, as owner */}
-      {ownVaultRequests.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Requests On Your Vault</Text>
-          {ownVaultRequests.map((r) => {
-            const requester = ownVaultTrustedPersons.find((tp) => tp.id === r.requested_by);
+      <ScrollView style={styles.body} contentContainerStyle={styles.content}>
+        {/* Vaults I'm trusted on */}
+        
+        {memberships.length === 0 && (
+          <Text style={styles.emptyText}>You aren't currently a trusted person on any vault.</Text>
+        )}
+        {memberships.map((m) => {
+          const requests = requestsByVault[m.vaultOwnerId] || [];
+          const activeRequest = requests.find((r) => r.status === 'awaiting_confirmation' || r.status === 'confirmed');
+          if (activeRequest) {
             return (
-              <View key={r.id} style={styles.card}>
-                <Text style={styles.cardTitle}>Requested by {requester?.full_name || 'a trusted person'}</Text>
-                <RequestStatusCard request={r} canConfirm={false} onConfirm={() => {}} busy={false} />
-                {r.status !== 'rejected' && !isRequestUnlocked(r) && (
+              <View key={m.vaultOwnerId} style={styles.statusCardWrapper}>
+                <RequestStatusCard
+                  subtitle={`${m.vaultOwnerName}'s Vault`}
+                  request={activeRequest}
+                  canConfirm={
+                    activeRequest.status === 'awaiting_confirmation' &&
+                    activeRequest.requested_by !== m.myTrustedPersonId
+                  }
+                  onConfirm={() => handleConfirm(m, activeRequest)}
+                  busy={busyId === activeRequest.id}
+                />
+
+                {isRequestUnlocked(activeRequest) && (
                   <TouchableOpacity
-                    style={styles.rejectButton}
-                    onPress={() => handleReject(r)}
-                    disabled={busyId === r.id}
+                    style={styles.statusPrimaryButton}
+                    onPress={() => navigation.navigate('HeirWorkspace', { vaultOwnerId: m.vaultOwnerId })}
                   >
-                    <Text style={styles.rejectButtonText}>This is a mistake - reject</Text>
+                    <Text style={styles.statusPrimaryButtonText}>Enter Family Workspace</Text>
                   </TouchableOpacity>
                 )}
               </View>
             );
-          })}
-        </>
-      )}
-    </ScrollView>
+          }
+
+          return (
+            <View key={m.vaultOwnerId} style={styles.card}>
+              <Text style={styles.cardTitle}>{m.vaultOwnerName}'s Vault</Text>
+              <Text style={styles.cardBody}>
+                If this person has passed away, you can request access. A second trusted person must confirm, then a {DEATH_VERIFICATION_WAITING_PERIOD_HOURS}-hour waiting period applies before the vault unlocks.
+              </Text>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => handleRequestUnlock(m)}
+                disabled={busyId === m.vaultOwnerId}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {busyId === m.vaultOwnerId ? 'Uploading...' : 'Request Vault Unlock'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })}
+
+        {/* My own vault, as owner */}
+        {ownVaultRequests.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Requests On Your Vault</Text>
+            {ownVaultRequests.map((r) => {
+              const requester = ownVaultTrustedPersons.find((tp) => tp.id === r.requested_by);
+              return (
+                <View key={r.id} style={styles.statusCardWrapper}>
+                  <RequestStatusCard
+                    subtitle={`Requested by ${requester?.full_name || 'a trusted person'}`}
+                    request={r}
+                    canConfirm={false}
+                    onConfirm={() => {}}
+                    busy={false}
+                  />
+                  {r.status !== 'rejected' && !isRequestUnlocked(r) && (
+                    <TouchableOpacity
+                      style={styles.rejectButton}
+                      onPress={() => handleReject(r)}
+                      disabled={busyId === r.id}
+                    >
+                      <Text style={styles.rejectButtonText}>This is a mistake - reject</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </>
+        )}
+
+        {hasPendingRequest && (
+          <>
+            <View style={styles.spacer} />
+            <View style={styles.notifyBox}>
+              <Text style={styles.notifyBoxText}>
+                You will receive a notification when the vault opens for the family.
+              </Text>
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 function RequestStatusCard({
+  subtitle,
   request,
   canConfirm,
   onConfirm,
   busy,
 }: {
+  subtitle: string;
   request: DeathVerificationRequest;
   canConfirm: boolean;
   onConfirm: () => void;
@@ -264,35 +304,56 @@ function RequestStatusCard({
   const unlocked = isRequestUnlocked(request);
 
   return (
-    <View style={styles.statusBox}>
-      <StatusStep done label="Request Submitted" detail={new Date(request.created_at).toLocaleString()} />
-      <StatusStep
-        done={!!request.secondary_confirmation_by}
-        active={request.status === 'awaiting_confirmation'}
-        label="Second Confirmation"
-        detail={request.status === 'awaiting_confirmation' ? 'Waiting for a second trusted person' : 'Confirmed'}
-      />
-      <StatusStep
-        done={unlocked}
-        active={request.status === 'confirmed' && !unlocked}
-        label="Waiting Period"
-        detail={
-          request.status === 'confirmed' && request.waiting_period_ends_at
-            ? unlocked
-              ? 'Elapsed'
-              : `Ends ${new Date(request.waiting_period_ends_at).toLocaleString()}`
-            : 'Not started'
-        }
-      />
-      <StatusStep done={unlocked} label="Vault Unlocked" detail={unlocked ? 'Access granted' : 'Pending'} last />
+    <View style={styles.statusCard}>
+      <Text style={styles.statusCardTitle}>Request Status</Text>
+      <Text style={styles.statusCardSubtitle}>{subtitle}</Text>
+
+      <View style={styles.timeline}>
+        <StatusStep
+          done
+          label="Request Submitted"
+          detail={new Date(request.created_at).toLocaleString()}
+          note="Death certificate uploaded"
+        />
+        <StatusStep
+          done={!!request.secondary_confirmation_by}
+          active={request.status === 'awaiting_confirmation'}
+          label="Second Confirmation"
+          detail={
+            request.status === 'awaiting_confirmation'
+              ? 'Waiting for a second trusted person'
+              : 'Confirmed'
+          }
+        />
+        <StatusStep
+          done={unlocked}
+          active={request.status === 'confirmed' && !unlocked}
+          label="Waiting Period"
+          detail={
+            request.status === 'confirmed' && request.waiting_period_ends_at
+              ? unlocked
+                ? 'Elapsed'
+                : `Ends ${new Date(request.waiting_period_ends_at).toLocaleString()}`
+              : 'Not started'
+          }
+        />
+        <StatusStep
+          done={unlocked}
+          label="Vault Unlocked"
+          detail={unlocked ? 'Access granted' : 'Family workspace opens'}
+          last
+        />
+      </View>
 
       {request.status === 'rejected' && (
         <Text style={styles.rejectedText}>This request was rejected.</Text>
       )}
 
       {canConfirm && (
-        <TouchableOpacity style={styles.primaryButton} onPress={onConfirm} disabled={busy}>
-          <Text style={styles.primaryButtonText}>{busy ? 'Confirming...' : 'Confirm This Request'}</Text>
+        <TouchableOpacity style={styles.statusPrimaryButton} onPress={onConfirm} disabled={busy}>
+          <Text style={styles.statusPrimaryButtonText}>
+            {busy ? 'Confirming...' : 'Confirm This Request'}
+          </Text>
         </TouchableOpacity>
       )}
     </View>
@@ -304,12 +365,14 @@ function StatusStep({
   active,
   label,
   detail,
+  note,
   last,
 }: {
   done: boolean;
   active?: boolean;
   label: string;
   detail: string;
+  note?: string;
   last?: boolean;
 }) {
   return (
@@ -321,13 +384,23 @@ function StatusStep({
             done ? styles.stepMarkerDone : active ? styles.stepMarkerActive : styles.stepMarkerPending,
           ]}
         >
-          <Text style={styles.stepMarkerText}>{done ? '✓' : active ? '⏳' : ''}</Text>
+          <Text style={done ? styles.stepMarkerTextDone : styles.stepMarkerTextPending}>
+            {done ? '✓' : active ? '⏳' : ''}
+          </Text>
         </View>
-        {!last && <View style={styles.stepLine} />}
+        {!last && (
+          <View
+            style={[
+              styles.stepLine,
+              done ? styles.stepLineDone : active ? styles.stepLineActive : styles.stepLinePending,
+            ]}
+          />
+        )}
       </View>
       <View style={styles.stepContent}>
-        <Text style={[styles.stepLabel, done && styles.stepLabelDone]}>{label}</Text>
+        <Text style={[styles.stepLabel, (done || active) && styles.stepLabelActive]}>{label}</Text>
         <Text style={styles.stepDetail}>{detail}</Text>
+        {note && <Text style={styles.stepNote}>{note}</Text>}
       </View>
     </View>
   );
@@ -336,22 +409,59 @@ function StatusStep({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.navy,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.cream,
+    backgroundColor: colors.navy,
+  },
+  headerGlow: {
+    top: 50,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(45,125,90,0.08)',
+  },
+  header: {
+    paddingTop: 36,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  backBtn: {
+    color: colors.gold,
+    fontSize: 15,
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontFamily: 'serif',
+    fontSize: 28,
+    fontWeight: '400',
+    color: colors.cream,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+  },
+  body: {
+    flex: 1,
   },
   content: {
+    flexGrow: 1,
     padding: 20,
+    paddingTop: 4,
+    paddingBottom: 32,
     gap: 12,
+  },
+  spacer: {
+    flex: 1,
+    minHeight: 24,
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.4)',
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginTop: 8,
@@ -359,35 +469,35 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: colors.textMuted,
+    color: 'rgba(255,255,255,0.35)',
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.08)',
     gap: 10,
   },
   cardTitle: {
     fontFamily: 'serif',
     fontSize: 18,
     fontWeight: '400',
-    color: colors.navy,
+    color: colors.cream,
   },
   cardBody: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.5)',
     lineHeight: 19,
   },
   primaryButton: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.gold,
     borderRadius: borderRadius.lg,
     padding: 14,
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: colors.gold,
+    color: colors.navy,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -397,32 +507,81 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(139,58,58,0.3)',
+    borderColor: 'rgba(224,122,122,0.3)',
   },
   rejectButtonText: {
-    color: colors.error,
+    color: '#E07A7A',
     fontSize: 13,
     fontWeight: '500',
   },
   rejectedText: {
-    color: colors.error,
+    color: '#E07A7A',
     fontSize: 12,
     fontWeight: '500',
   },
-  statusBox: {
+  statusCardWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 10,
+  },
+  statusCard: {
+    backgroundColor: colors.navy,
+    borderRadius: 20,
+    padding: 20,
+    gap: 4,
+    overflow: 'hidden',
+  },
+  statusCardTitle: {
+    fontFamily: 'serif',
+    fontSize: 22,
+    fontWeight: '400',
+    color: colors.cream,
+  },
+  statusCardSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 12,
+  },
+  timeline: {
     gap: 0,
+  },
+  statusPrimaryButton: {
+    backgroundColor: colors.gold,
+    borderRadius: borderRadius.lg,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  statusPrimaryButtonText: {
+    color: colors.navy,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  notifyBox: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  notifyBoxText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    lineHeight: 17,
   },
   step: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
   },
   stepMarkerColumn: {
     alignItems: 'center',
   },
   stepMarker: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -430,39 +589,60 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
   },
   stepMarkerActive: {
-    backgroundColor: colors.goldPale,
+    backgroundColor: 'rgba(201,168,76,0.2)',
     borderWidth: 2,
     borderColor: colors.gold,
+    borderStyle: 'dashed',
   },
   stepMarkerPending: {
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderStyle: 'dashed',
   },
-  stepMarkerText: {
-    fontSize: 12,
+  stepMarkerTextDone: {
+    fontSize: 14,
     color: colors.white,
+  },
+  stepMarkerTextPending: {
+    fontSize: 14,
+    color: colors.gold,
   },
   stepLine: {
     width: 2,
     flex: 1,
-    minHeight: 20,
-    backgroundColor: colors.border,
+    minHeight: 24,
+    marginTop: 4,
+  },
+  stepLineDone: {
+    backgroundColor: 'rgba(45,125,90,0.4)',
+  },
+  stepLineActive: {
+    backgroundColor: 'rgba(201,168,76,0.3)',
+  },
+  stepLinePending: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   stepContent: {
     flex: 1,
-    paddingBottom: 16,
+    paddingTop: 6,
+    paddingBottom: 24,
   },
   stepLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: 2,
+    color: 'rgba(255,255,255,0.3)',
   },
-  stepLabelDone: {
-    color: colors.navy,
+  stepLabelActive: {
+    color: colors.cream,
   },
   stepDetail: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 2,
+  },
+  stepNote: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: 'rgba(45,125,90,0.8)',
+    marginTop: 4,
   },
 });

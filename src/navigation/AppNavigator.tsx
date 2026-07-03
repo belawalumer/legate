@@ -312,20 +312,11 @@ export default function AppNavigator() {
                 headerShown: false,
               }}
             />
-            <Stack.Screen 
-              name="DeathVerification" 
+            <Stack.Screen
+              name="DeathVerification"
               component={DeathVerificationScreen}
-              options={{ 
-                headerShown: true, 
-                title: 'Unlock Vault',
-                headerStyle: {
-                  backgroundColor: colors.navy,
-                },
-                headerTintColor: colors.cream,
-                headerTitleStyle: {
-                  fontFamily: 'serif',
-                  fontWeight: '400',
-                },
+              options={{
+                headerShown: false,
               }}
             />
             <Stack.Screen
