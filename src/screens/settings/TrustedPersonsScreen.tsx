@@ -7,6 +7,7 @@ import { getCurrentUser } from '../../services/auth';
 import { MAX_TRUSTED_PERSONS } from '../../constants';
 import { getTrustedPersonCount } from '../../services/plan';
 import { alert } from '../../components/AppAlert';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 
 const RELATIONSHIP_OPTIONS = [
   { value: 'spouse', label: 'Spouse' },
@@ -17,6 +18,7 @@ const RELATIONSHIP_OPTIONS = [
 
 export default function TrustedPersonsScreen() {
   const route = useRoute();
+  const { profile: myProfile } = useUserProfile();
   const params = route.params as { vaultOwnerId?: string; vaultOwnerName?: string } | undefined;
   const isViewingOtherVault = !!params?.vaultOwnerId;
 
@@ -155,14 +157,7 @@ export default function TrustedPersonsScreen() {
 
       if (error) throw error;
 
-      // Get vault owner's name for email
-      const { data: ownerProfile } = await supabase
-        .from('user_profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-
-      const ownerName = ownerProfile?.full_name || user.user_metadata?.full_name || 'Vault Owner';
+      const ownerName = myProfile?.fullName || user.user_metadata?.full_name || 'Vault Owner';
 
       // Call Edge Function to send invitation email
       try {

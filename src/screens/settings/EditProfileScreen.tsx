@@ -11,11 +11,13 @@ import {
   updatePassword,
 } from '../../services/auth';
 import { alert } from '../../components/AppAlert';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 
 type PasswordStep = 'form' | 'otp';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
+  const { refresh: refreshProfile } = useUserProfile();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -48,6 +50,7 @@ export default function EditProfileScreen() {
     setSavingName(true);
     try {
       await updateFullName(fullName.trim());
+      await refreshProfile();
       alert('Success', 'Your name has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

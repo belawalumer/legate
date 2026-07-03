@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch, ScrollView, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { signOut, getCurrentUser, isBiometricAvailable } from '../../services/auth';
-import { supabase } from '../../services/supabase';
+import { signOut, isBiometricAvailable } from '../../services/auth';
 import { colors, borderRadius } from '../../constants/theme';
-import { PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
+import { PLAN_LABELS } from '../../services/plan';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 import {
   getBiometricLockEnabled,
   setBiometricLockEnabled,
@@ -29,7 +29,7 @@ function SettingIcon({ name }: { name: React.ComponentProps<typeof Ionicons>['na
 
 export default function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const { profile: userProfile } = useUserProfile();
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [autoLockSeconds, setAutoLockSecondsState] = useState(60);
@@ -40,12 +40,6 @@ export default function SettingsScreen() {
     getNotificationsEnabled().then(setNotificationsEnabledState);
     getAutoLockSeconds().then(setAutoLockSecondsState);
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadUserProfile();
-    }, [])
-  );
 
   const handleToggleBiometric = async (value: boolean) => {
     if (value) {
@@ -71,47 +65,6 @@ export default function SettingsScreen() {
   const handleToggleNotifications = async (value: boolean) => {
     setNotificationsEnabledState(value);
     await setNotificationsEnabled(value);
-  };
-
-  const loadUserProfile = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
-
-      const { data } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-
-      if (data) {
-        setUserProfile({
-          ...data,
-          email: user.email || data.email,
-          avatarUrl,
-        });
-      } else {
-        // Fallback to auth user data
-        setUserProfile({
-          full_name: user.user_metadata?.full_name || 'User',
-          email: user.email || '',
-          avatarUrl,
-        });
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      // Fallback to auth user
-      const user = await getCurrentUser();
-      if (user) {
-        setUserProfile({
-          full_name: user.user_metadata?.full_name || 'User',
-          email: user.email || '',
-          avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-        });
-      }
-    }
   };
 
   const getInitials = (name: string) => {
@@ -158,20 +111,20 @@ export default function SettingsScreen() {
               <Image source={{ uri: userProfile.avatarUrl }} style={styles.avatarImage} />
             ) : (
               <Text style={styles.avatarText}>
-                {userProfile?.full_name ? getInitials(userProfile.full_name) : 'U'}
+                {userProfile?.fullName ? getInitials(userProfile.fullName) : 'U'}
               </Text>
             )}
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>
-              {userProfile?.full_name || 'User'}
+              {userProfile?.fullName || 'User'}
             </Text>
             <Text style={styles.profileEmail}>
               {userProfile?.email || ''}
             </Text>
             <View style={styles.planBadge}>
               <Text style={styles.planBadgeText}>
-                {PLAN_LABELS[(userProfile?.subscription_plan as SubscriptionPlan) || 'free']} Plan
+                {PLAN_LABELS[userProfile?.subscriptionPlan || 'free']} Plan
               </Text>
             </View>
           </View>

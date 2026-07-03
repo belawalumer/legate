@@ -6,9 +6,11 @@ import { PLAN_PRICING } from '../../constants';
 import { getCurrentUser } from '../../services/auth';
 import { setUserPlan, PLAN_LABELS, SubscriptionPlan } from '../../services/plan';
 import { alert } from '../../components/AppAlert';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 
 export default function PaywallScreen() {
   const navigation = useNavigation();
+  const { refresh: refreshProfile } = useUserProfile();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [loading, setLoading] = useState(false);
 
@@ -19,6 +21,7 @@ export default function PaywallScreen() {
       if (!user) return;
 
       await setUserPlan(user.id, selectedPlan as SubscriptionPlan);
+      await refreshProfile();
       alert(
         'Plan Updated',
         `You're now on the ${PLAN_LABELS[selectedPlan as SubscriptionPlan]} plan.\n\nNote: this app doesn't have real payment processing connected yet, so no charge was made.`,

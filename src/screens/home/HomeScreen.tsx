@@ -5,13 +5,14 @@ import { supabase } from '../../services/supabase';
 import { getCurrentUser } from '../../services/auth';
 import { colors, borderRadius, spacing } from '../../constants/theme';
 import { VAULT_CATEGORIES } from '../../constants';
+import { useUserProfile } from '../../contexts/UserProfileContext';
 import { Svg, Circle } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const [userName, setUserName] = useState('User');
+  const { profile } = useUserProfile();
   const [healthScore, setHealthScore] = useState(0);
   const [displayedHealthScore, setDisplayedHealthScore] = useState(0);
   const [stats, setStats] = useState({ items: 0, trusted: 0, categories: 0 });
@@ -47,26 +48,6 @@ export default function HomeScreen() {
     try {
       const user = await getCurrentUser();
       if (!user) return;
-
-      // Get user profile
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .single();
-
-      if (profile && profile.full_name) {
-        setUserName(profile.full_name);
-      } else if (user.user_metadata?.full_name) {
-        // Fallback to user metadata
-        setUserName(user.user_metadata.full_name);
-      } else if (user.email) {
-        // Fallback to email username
-        const emailName = user.email.split('@')[0];
-        setUserName(emailName.charAt(0).toUpperCase() + emailName.slice(1));
-      } else {
-        setUserName('User');
-      }
 
       // Get vault items
       const { data: vaultItems } = await supabase
@@ -129,7 +110,7 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.greeting}>{getGreeting()}</Text>
-        <Text style={styles.name}>{userName || 'User'}</Text>
+        <Text style={styles.name}>{profile?.fullName || 'User'}</Text>
         
         {/* Health Ring Container */}
         <View style={styles.healthRingContainer}>
