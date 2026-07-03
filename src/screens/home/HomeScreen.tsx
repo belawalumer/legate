@@ -10,7 +10,7 @@ import { Svg, Circle } from 'react-native-svg';
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [userName, setUserName] = useState('User');
-  const [healthScore, setHealthScore] = useState(62);
+  const [healthScore, setHealthScore] = useState(0);
   const [stats, setStats] = useState({ items: 0, trusted: 0, categories: 0 });
   const [items, setItems] = useState<any[]>([]);
 
