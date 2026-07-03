@@ -43,3 +43,5 @@ yarn-error.*
 
 # supabase local state
 supabase/.temp
+
+legate-mockups.html
