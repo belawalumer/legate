@@ -22,6 +22,10 @@ import { alert } from '../../components/AppAlert';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+function SettingIcon({ name }: { name: React.ComponentProps<typeof Ionicons>['name'] }) {
+  return <Ionicons name={name} size={20} color={colors.gold} />;
+}
+
 export default function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -169,7 +173,7 @@ export default function SettingsScreen() {
         <View style={styles.settingsGroup}>
           <View style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>🔒</Text>
+              <SettingIcon name="finger-print-outline" />
               <View>
                 <Text style={styles.settingRowLabel}>Biometric Lock</Text>
                 <Text style={styles.settingRowHint}>Require Face ID / Touch ID to open the app</Text>
@@ -188,7 +192,7 @@ export default function SettingsScreen() {
             onPress={() => setShowAutoLockPicker(true)}
           >
             <View style={[styles.settingRowLeft, styles.settingRowLeftFlex]}>
-              <Text style={styles.settingIcon}>⏱️</Text>
+              <SettingIcon name="time-outline" />
               <View style={styles.settingRowTextFlex}>
                 <Text style={styles.settingRowLabel}>Auto-lock</Text>
                 <Text style={styles.settingRowHint} numberOfLines={2}>
@@ -205,7 +209,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>🔔</Text>
+              <SettingIcon name="notifications-outline" />
               <View>
                 <Text style={styles.settingRowLabel}>Notifications</Text>
                 <Text style={styles.settingRowHint}>Vault and estate activity alerts</Text>
@@ -227,7 +231,7 @@ export default function SettingsScreen() {
             onPress={() => navigation.navigate('DeathVerification')}
           >
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>🔓</Text>
+              <SettingIcon name="lock-open-outline" />
               <Text style={styles.settingRowLabel}>Vault Unlock Requests</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
@@ -238,7 +242,7 @@ export default function SettingsScreen() {
             onPress={() => navigation.navigate('Checklist')}
           >
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>✅</Text>
+              <SettingIcon name="checkmark-circle-outline" />
               <Text style={styles.settingRowLabel}>Estate Checklist</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
@@ -249,7 +253,7 @@ export default function SettingsScreen() {
             onPress={() => navigation.navigate('Subscriptions')}
           >
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>📺</Text>
+              <SettingIcon name="repeat-outline" />
               <Text style={styles.settingRowLabel}>Subscriptions</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
@@ -260,7 +264,7 @@ export default function SettingsScreen() {
         <View style={styles.settingsGroup}>
           <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Paywall')}>
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>💎</Text>
+              <SettingIcon name="diamond-outline" />
               <Text style={styles.settingRowLabel}>Upgrade Plan</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
@@ -268,7 +272,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>📋</Text>
+              <SettingIcon name="shield-checkmark-outline" />
               <Text style={styles.settingRowLabel}>Privacy Policy</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
@@ -276,14 +280,14 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingRow}>
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>📄</Text>
+              <SettingIcon name="document-text-outline" />
               <Text style={styles.settingRowLabel}>Terms of Service</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
           </TouchableOpacity>
 
           {/* Developer Option - Reset Onboarding */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.settingRow}
             onPress={async () => {
               alert(
@@ -303,7 +307,7 @@ export default function SettingsScreen() {
             }}
           >
             <View style={styles.settingRowLeft}>
-              <Text style={styles.settingIcon}>🔄</Text>
+              <SettingIcon name="refresh-outline" />
               <Text style={styles.settingRowLabel}>Reset Onboarding</Text>
             </View>
             <Text style={styles.settingRowValue}>›</Text>
@@ -467,9 +471,6 @@ const styles = StyleSheet.create({
   },
   settingRowTextFlex: {
     flex: 1,
-  },
-  settingIcon: {
-    fontSize: 20,
   },
   settingRowLabel: {
     fontSize: 14,
