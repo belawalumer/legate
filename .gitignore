@@ -45,3 +45,9 @@ yarn-error.*
 supabase/.temp
 
 legate-mockups.html
+
+# local reference images
+/images
+
+# contains Supabase URL/anon key inline, kept local per project convention
+/eas.json
